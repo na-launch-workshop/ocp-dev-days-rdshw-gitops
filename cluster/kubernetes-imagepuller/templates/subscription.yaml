@@ -1,3 +1,8 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: "{{ include "kubernetes-imagepuller.name" . }}-operatorgroup"
+spec: {}
 ---
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription

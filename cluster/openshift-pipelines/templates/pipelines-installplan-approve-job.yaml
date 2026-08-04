@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: pipelines-installplan-approve
+spec:
+  # ttlSecondsAfterFinished: 1200
+  backoffLimit: 5
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: pipelines-installplan-approver
+      containers:
+        - name: patch
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for Pipelines InstallPlan to exist..."
+              
+              install_plan=""
+              until [[ ${install_plan} != "" ]]
+              do
+                oc get installplan
+                install_plan=$(oc get installplan | grep openshift-pipelines-operator | grep false | cut -d" " -f1)
+                sleep 15
+              done
+              oc patch installplan ${install_plan} --type merge --patch '{"spec":{"approved":true }}'
+              echo "Pipelines InstallPlan Approved"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+

@@ -26,6 +26,7 @@ spec:
     default: {{ .Values.git.ref }}
   tasks:
   - name: base-images
+    retries: 10
     taskRef:
       name: cekit-class-builder
     params:
@@ -40,6 +41,7 @@ spec:
     - name: revision
       value: $(params.revision)
   - name: app-product-images
+    retries: 10
     runAfter:
     - base-images
     taskRef:

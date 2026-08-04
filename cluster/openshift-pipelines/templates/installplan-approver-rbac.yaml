@@ -1,0 +1,39 @@
+---
+# ServiceAccount, Role, and RoleBinding that grant permission to approve
+# InstallPlans in the release namespace. The pipelines-installplan-approve
+# Job uses this account to patch InstallPlans and set spec.approved to true.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pipelines-installplan-approver
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: pipelines-installplan-approver
+rules:
+  - apiGroups:
+      - "operators.coreos.com"
+    resources:
+      - "installplans"
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+      - "update"
+      - "patch"
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: pipelines-installplan-approver
+subjects:
+  - kind: ServiceAccount
+    name: pipelines-installplan-approver
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: pipelines-installplan-approver
+  apiGroup: rbac.authorization.k8s.io

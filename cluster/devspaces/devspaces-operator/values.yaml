@@ -6,19 +6,10 @@ namespace: ""
 devspaces:
   subscription:
     channel: stable
-    installPlanApproval: Automatic
+    installPlanApproval: Manual
     name: devspaces
     source: redhat-operators
-    startingCSV: ""
-    sourceNamespace: openshift-marketplace
-
-webTerminal:
-  enabled: true
-  subscription:
-    channel: fast
-    name: web-terminal
-    installPlanApproval: Automatic
-    source: redhat-operators
+    startingCSV: "devspacesoperator.v3.29.1"
     sourceNamespace: openshift-marketplace
 
 argocd:

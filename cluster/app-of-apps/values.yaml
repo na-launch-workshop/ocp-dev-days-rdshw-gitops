@@ -49,7 +49,7 @@ externalSecrets:
 
 openshiftPipelines:
   name: openshift-pipelines
-  namespace: openshift-operators
+  namespace: openshift-pipelines
 
 gitlab:
   name: gitlab
@@ -76,7 +76,7 @@ quay:
 
 kubernetesImagepuller:
   name: kubernetes-imagepuller
-  namespace: openshift-operators
+  namespace: kubernetes-imagepuller
 
 devspaces:
   enabled: true

@@ -13,15 +13,6 @@ spec:
     targetRevision: {{ .Values.gitops.targetRevision }}
     helm:
       valuesObject:
-        devspaces-operator:
-          devspaces:
-            subscription:
-              source: {{ include "app-of-apps.operatorSource" . }}
-              {{- if .Values.catalogSource.enabled }}
-              startingCSV: ""
-              {{- end }}
-          webTerminal:
-            enabled: false
         devspaces-instance:
           gitlab:
             host: {{ .Values.gitlab.host }}

@@ -1,6 +1,6 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-{{ include "app-of-apps.metadata" (dict "name" .Values.openshiftPipelines.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
+{{ include "app-of-apps.metadata" (dict "name" .Values.openshiftPipelines.name "namespace" .Values.argocd.namespace "syncWave" "-1") }}
 spec:
   destination:
     namespace: {{ .Values.openshiftPipelines.namespace }}
@@ -10,10 +10,6 @@ spec:
     path: cluster/openshift-pipelines
     repoURL: {{ .Values.gitops.repoURL }}
     targetRevision: {{ .Values.gitops.targetRevision }}
-    helm:
-      valuesObject:
-        subscription:
-          source: {{ include "app-of-apps.operatorSource" . }}
   syncPolicy:
     automated: {}
     retry:
@@ -23,5 +19,5 @@ spec:
         maxDuration: 3m0s
       limit: 30
     syncOptions:
-      - CreateNamespace=false
+      - CreateNamespace=true
       - RespectIgnoreDifferences=true

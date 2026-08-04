@@ -29,6 +29,7 @@ spec:
     description: The class of images to build
   tasks:
   - name: build-images
+    retries: 10
     taskRef:
       name: cekit-class-builder
     params:
