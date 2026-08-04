@@ -3,17 +3,15 @@
 # - Uncomment the ConfigMap below
 # - Set DEVHUB_FULL_LOGO and/or DEVHUB_ICON_LOGO to data URIs, e.g.:
 #     data:image/png;base64,$(cat image.png | base64 -w 0)
-# - Apply to the same namespace as Developer Hub (typically backstage)
-# - Re-sync the developer_hub chart so the Backstage CR references this ConfigMap
-#
-# When this ConfigMap is absent, backstage-app-config uses the default logos
-# defined in 3-wave-config-backstage-app.yaml via ${DEVHUB_*_LOGO: "..."} fallbacks.
+# - Apply to the same namespace as Developer Hub (defaults to rhdh)
+# - Recycle the Developer Hub pod
+
 # ------------------------------------------------------------------------------
 # apiVersion: v1
 # kind: ConfigMap
 # metadata:
 #   name: custom-branding
-#   namespace: backstage
+#   namespace: rhdh
 # data:
 #   HOMEPAGE_TITLE: "Red Hat Launch Workshop"
 #   HOMEPAGE_SUBTITLE: "Welcome to Developer Hub!"
