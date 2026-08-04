@@ -43,6 +43,11 @@ spec:
         template:
           spec:
             containers:
+              - envFrom:
+                  - configMapRef:
+                      name: custom-branding
+                      optional: true
+                name: backstage-backend
               - env:
                   - name: VALIDATION_PROVIDER
                     value: vllm
