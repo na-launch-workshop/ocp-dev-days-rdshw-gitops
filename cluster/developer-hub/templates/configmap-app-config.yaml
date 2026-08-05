@@ -202,7 +202,7 @@ data:
 
     catalog:
       rules:
-        - allow: [Component, System, API, Resource, Location, Template, Domain]
+        - allow: [Component, System, API, Resource, Location, Template, Domain, Group]
       providers:
         keycloakOrg:
           default:
