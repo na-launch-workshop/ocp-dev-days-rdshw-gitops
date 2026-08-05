@@ -56,6 +56,19 @@ gitlab:
         - id: dev2
         - id: pe1
         - id: pe2
+    - name: workshop
+      repo:
+        - name: workshop-devhub
+          url: https://github.com/na-launch-workshop/workshop-devhub-kick_off_scaffolder.git
+        - name: easteregg-template
+          url: https://github.com/na-launch-workshop/platform-software-templates/blob/main/workshop/easteregg/template.yaml
+        - name: easteregg-collection
+          url: https://github.com/na-launch-workshop/platform-software-templates/blob/main/workshop/platform/easteregg-collection.yaml
+      users:
+        - id: dev1
+        - id: dev2
+        - id: pe1
+        - id: pe2
   templates:
     - group: parasol
       project: parasol-insurance
