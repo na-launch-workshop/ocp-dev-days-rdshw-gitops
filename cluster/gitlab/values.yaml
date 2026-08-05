@@ -60,10 +60,8 @@ gitlab:
       repo:
         - name: workshop-devhub
           url: https://github.com/na-launch-workshop/workshop-devhub-kick_off_scaffolder.git
-        - name: easteregg-template
-          url: https://github.com/na-launch-workshop/platform-software-templates/blob/main/workshop/easteregg/template.yaml
-        - name: easteregg-collection
-          url: https://github.com/na-launch-workshop/platform-software-templates/blob/main/workshop/platform/easteregg-collection.yaml
+        - name: workshop-easteregg-entities
+          url: https://github.com/na-launch-workshop/workshop-easteregg-entities.git
       users:
         - id: dev1
         - id: dev2
