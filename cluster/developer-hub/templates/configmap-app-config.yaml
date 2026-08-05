@@ -19,7 +19,7 @@ data:
             primaryColor: '${PRIMARY_LIGHT_COLOR:-#0066CC}'
             palette:
               navigation:
-                indicator: '${NAVIGATION_LIGHT_COLOR:-#0066CC}'
+                indicator: '${NAVIGATION_LIGHT_COLOR:-transparent}'
             pageTheme:
               home:
                 backgroundColor: '${BACKGROUND_LIGHT_COLOR:-#FFFFFF}'
@@ -27,10 +27,55 @@ data:
             primaryColor: '${PRIMARY_DARK_COLOR:-#1FA7F8}'
             palette:
               navigation:
-                indicator: '${NAVIGATION_DARK_COLOR:-#0066CC}'
+                indicator: '${NAVIGATION_DARK_COLOR:-transparent}'
             pageTheme:
               home:
                 backgroundColor: '${BACKGROUND_DARK_COLOR:-#0F1214}'
+
+    dynamicPlugins:
+      frontend:
+        default.main-menu-items:
+          menuItems:
+            default.home:
+              title: Home
+              icon: home
+              priority: 100
+              enabled: true
+            default.my-group:
+              title: My Group
+              icon: group
+              priority: 90
+              enabled: true
+            default.catalog:
+              title: Catalog
+              icon: category
+              to: catalog
+              priority: 80
+              enabled: true
+            default.apis:
+              title: APIs
+              icon: extension
+              to: api-docs
+              priority: 70
+              enabled: true
+            default.learning-path:
+              title: Learning Paths
+              icon: school
+              to: learning-paths
+              priority: 60
+              enabled: true
+            default.create:
+              title: Self-service
+              icon: add
+              to: create
+              priority: 50
+              enabled: true
+            default.history:
+              title: History
+              icon: docs
+              to: create/tasks
+              priority: 40
+              enabled: true
 
     lightspeed:
       prompts:
