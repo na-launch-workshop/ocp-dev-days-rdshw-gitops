@@ -1,0 +1,25 @@
+# ------------------------------------------------------------------------------
+# To apply a custom branded logo:
+# - Uncomment the ConfigMap below
+# - Set DEVHUB_FULL_LOGO and/or DEVHUB_ICON_LOGO to data URIs, e.g.:
+#     data:image/png;base64,$(cat image.png | base64 -w 0)
+# - Apply to the same namespace as Developer Hub (defaults to rhdh)
+# - Recycle the Developer Hub pod
+
+# ------------------------------------------------------------------------------
+# apiVersion: v1
+# kind: ConfigMap
+# metadata:
+#   name: custom-branding
+#   namespace: rhdh
+# data:
+#   HOMEPAGE_TITLE: "Red Hat Launch Workshop"
+#   HOMEPAGE_SUBTITLE: "Welcome to Developer Hub!"
+#   PRIMARY_LIGHT_COLOR: "#0066CC"
+#   NAVIGATION_LIGHT_COLOR: "#EE0000"
+#   BACKGROUND_LIGHT_COLOR: "#FFFFFF"
+#   PRIMARY_DARK_COLOR: "#1FA7F8"
+#   NAVIGATION_DARK_COLOR: "#5F0000"
+#   BACKGROUND_DARK_COLOR: "#0F1214"
+#   DEVHUB_FULL_LOGO: "data:image/png;base64,your_custom_base64_encoded_logo_here"
+#   DEVHUB_ICON_LOGO: "data:image/png;base64,your_custom_base64_encoded_logo_here"

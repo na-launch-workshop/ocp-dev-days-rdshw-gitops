@@ -56,6 +56,17 @@ gitlab:
         - id: dev2
         - id: pe1
         - id: pe2
+    - name: workshop
+      repo:
+        - name: workshop-devhub
+          url: https://github.com/na-launch-workshop/workshop-devhub-kick_off_scaffolder.git
+        - name: workshop-catalog-entities
+          url: https://github.com/na-launch-workshop/workshop-catalog-entities.git
+      users:
+        - id: dev1
+        - id: dev2
+        - id: pe1
+        - id: pe2
   templates:
     - group: parasol
       project: parasol-insurance
