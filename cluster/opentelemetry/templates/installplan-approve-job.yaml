@@ -17,14 +17,16 @@ spec:
             - |
               echo "Waiting for OpenTelemetry InstallPlan to exist..."
 
+              OPERATOR_NS="openshift-opentelemetry-operator"
+
               install_plan=""
               until [[ ${install_plan} != "" ]]
               do
-                oc get installplan
-                install_plan=$(oc get installplan | grep opentelemetry-operator | grep false | cut -d" " -f1)
+                oc get installplan -n ${OPERATOR_NS}
+                install_plan=$(oc get installplan -n ${OPERATOR_NS} | grep opentelemetry-operator | grep false | cut -d" " -f1)
                 sleep 15
               done
-              oc patch installplan ${install_plan} --type merge --patch '{"spec":{"approved":true }}'
+              oc patch installplan ${install_plan} -n ${OPERATOR_NS} --type merge --patch '{"spec":{"approved":true }}'
               echo "OpenTelemetry InstallPlan Approved"
           resources:
             requests:
