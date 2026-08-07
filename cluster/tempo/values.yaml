@@ -1,0 +1,12 @@
+nameOverride: ""
+
+subscription:
+  channel: stable
+  installPlanApproval: Automatic
+  name: tempo-product
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: ""
+
+tempoStack:
+  namespace: tempo

@@ -2,7 +2,7 @@ nameOverride: ""
 
 subscription:
   channel: stable
-  installPlanApproval: Manual
+  installPlanApproval: Automatic
   name: opentelemetry-product
   source: redhat-operators
   sourceNamespace: openshift-marketplace
@@ -14,5 +14,5 @@ collector:
   exporters:
     otlp:
       enabled: false
-      endpoint: "tempo-simplest-distributor.tempo:4317"
+      endpoint: "tempo-tempo.tempo.svc.cluster.local:4317"
       insecure: true

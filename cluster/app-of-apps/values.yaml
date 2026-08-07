@@ -107,3 +107,7 @@ developerHub:
 opentelemetry:
   name: opentelemetry
   namespace: opentelemetry
+
+tempo:
+  name: tempo
+  namespace: tempo

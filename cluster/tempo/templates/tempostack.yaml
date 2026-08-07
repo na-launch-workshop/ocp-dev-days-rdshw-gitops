@@ -1,0 +1,13 @@
+apiVersion: tempo.grafana.com/v1alpha1
+kind: TempoMonolithic
+metadata:
+  name: tempo
+  namespace: {{ .Values.tempoStack.namespace }}
+spec:
+  storage:
+    traces:
+      backend: memory
+  jaegerui:
+    enabled: true
+    route:
+      enabled: true
