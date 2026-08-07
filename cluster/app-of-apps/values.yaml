@@ -103,3 +103,11 @@ workspaceImages:
 developerHub:
   name: developer-hub
   namespace: rhdh
+
+opentelemetry:
+  name: opentelemetry
+  namespace: opentelemetry
+
+tempo:
+  name: tempo
+  namespace: tempo

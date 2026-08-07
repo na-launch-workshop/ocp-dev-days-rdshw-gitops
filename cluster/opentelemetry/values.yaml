@@ -1,0 +1,18 @@
+nameOverride: ""
+
+subscription:
+  channel: stable
+  installPlanApproval: Automatic
+  name: opentelemetry-product
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: "opentelemetry-operator.v0.140.0-2"
+
+collector:
+  namespace: opentelemetry
+  mode: deployment
+  exporters:
+    otlp:
+      enabled: false
+      endpoint: "tempo-tempo.tempo.svc.cluster.local:4317"
+      insecure: true
