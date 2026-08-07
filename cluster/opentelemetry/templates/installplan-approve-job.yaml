@@ -23,8 +23,12 @@ spec:
               until [[ ${install_plan} != "" ]]
               do
                 oc get installplan -n ${OPERATOR_NS}
-                install_plan=$(oc get installplan -n ${OPERATOR_NS} | grep opentelemetry-operator | grep false | cut -d" " -f1)
-                sleep 15
+                # Match any InstallPlan for the opentelemetry-operator CSV, approved or not
+                install_plan=$(oc get installplan -n ${OPERATOR_NS} -o jsonpath='{.items[?(@.spec.clusterServiceVersionNames[*]=="opentelemetry-operator")].metadata.name}' 2>/dev/null)
+                if [[ -z ${install_plan} ]]; then
+                  install_plan=$(oc get installplan -n ${OPERATOR_NS} | grep opentelemetry-operator | head -1 | cut -d" " -f1)
+                fi
+                [[ -z ${install_plan} ]] && sleep 15
               done
               oc patch installplan ${install_plan} -n ${OPERATOR_NS} --type merge --patch '{"spec":{"approved":true }}'
               echo "OpenTelemetry InstallPlan Approved"
