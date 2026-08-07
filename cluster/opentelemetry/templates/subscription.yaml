@@ -1,0 +1,21 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: "openshift-opentelemetry-og"
+  namespace: openshift-opentelemetry-operator
+spec: {}
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: opentelemetry-product
+  namespace: openshift-opentelemetry-operator
+spec:
+  channel: {{ .Values.subscription.channel }}
+  installPlanApproval: {{ .Values.subscription.installPlanApproval }}
+  name: {{ .Values.subscription.name }}
+  source: {{ .Values.subscription.source }}
+  sourceNamespace: {{ .Values.subscription.sourceNamespace }}
+  {{- if .Values.subscription.startingCSV }}
+  startingCSV: {{ .Values.subscription.startingCSV }}
+  {{- end }}

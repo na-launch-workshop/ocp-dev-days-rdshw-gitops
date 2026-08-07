@@ -1,0 +1,75 @@
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otel
+  namespace: {{ .Values.collector.namespace }}
+spec:
+  mode: {{ .Values.collector.mode }}
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        send_batch_size: 10000
+        timeout: 10s
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+      k8sattributes:
+        extract:
+          metadata:
+            - k8s.namespace.name
+            - k8s.deployment.name
+            - k8s.pod.name
+            - k8s.node.name
+        passthrough: false
+        pod_association:
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.ip
+          - sources:
+              - from: resource_attribute
+                name: k8s.pod.uid
+          - sources:
+              - from: connection
+    exporters:
+      debug:
+        verbosity: detailed
+      {{- if .Values.collector.exporters.otlp.enabled }}
+      otlp:
+        endpoint: {{ .Values.collector.exporters.otlp.endpoint }}
+        tls:
+          insecure: {{ .Values.collector.exporters.otlp.insecure }}
+      {{- end }}
+    service:
+      pipelines:
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - k8sattributes
+            - batch
+          exporters:
+            - debug
+            {{- if .Values.collector.exporters.otlp.enabled }}
+            - otlp
+            {{- end }}
+        metrics:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            - k8sattributes
+            - batch
+          exporters:
+            - debug
+            {{- if .Values.collector.exporters.otlp.enabled }}
+            - otlp
+            {{- end }}
