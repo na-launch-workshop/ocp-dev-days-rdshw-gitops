@@ -3,6 +3,8 @@ kind: TempoMonolithic
 metadata:
   name: tempo
   namespace: {{ .Values.tempoStack.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
 spec:
   storage:
     traces:
