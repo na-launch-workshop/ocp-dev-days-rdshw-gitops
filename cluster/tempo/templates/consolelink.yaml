@@ -1,7 +1,7 @@
 apiVersion: console.openshift.io/v1
 kind: ConsoleLink
 metadata:
-  name: developer-hub
+  name: tempo
 spec:
   applicationMenu:
     section: Distributed Tracing
