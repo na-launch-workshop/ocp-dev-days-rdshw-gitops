@@ -9,7 +9,7 @@ subscription:
   startingCSV: "opentelemetry-operator.v0.140.0-2"
 
 collector:
-  namespace: openshift-opentelemetry-operator
+  namespace: opentelemetry
   mode: deployment
   exporters:
     otlp:
