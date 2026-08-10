@@ -22,7 +22,7 @@ data:
                 indicator: '${NAVIGATION_LIGHT_COLOR:-transparent}'
             pageTheme:
               home:
-                backgroundColor: '${BACKGROUND_LIGHT_COLOR:-#FFFFFF}'
+                backgroundColor: '${BACKGROUND_LIGHT_COLOR:-#EE0000}'
           dark:
             primaryColor: '${PRIMARY_DARK_COLOR:-#1FA7F8}'
             palette:
@@ -30,7 +30,7 @@ data:
                 indicator: '${NAVIGATION_DARK_COLOR:-transparent}'
             pageTheme:
               home:
-                backgroundColor: '${BACKGROUND_DARK_COLOR:-#0F1214}'
+                backgroundColor: '${BACKGROUND_DARK_COLOR:-#5F0000}'
 
     dynamicPlugins:
       frontend:
