@@ -386,7 +386,7 @@ data:
                     importName: CatalogStarredEntitiesCard
                     config:
                       layouts:
-                        xl: { w: 4, h: 4, x: 7 }
+                        xl: { w: 4, h: 4, x: 8 }
                         lg: { w: 4, h: 4, x: 8 }
                         md: { w: 4, h: 4, x: 8 }
                         sm: { w: 12, h: 4 }
