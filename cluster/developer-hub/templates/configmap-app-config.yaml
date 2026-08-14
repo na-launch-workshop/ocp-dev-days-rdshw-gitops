@@ -129,6 +129,7 @@ data:
     homepage:
       quickAccess:
         title: Quick Access
+        path: /opt/app-root/src/dashboard.yaml
 
     signInPage: oidc
     auth:

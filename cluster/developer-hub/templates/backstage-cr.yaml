@@ -13,7 +13,6 @@ spec:
       mountPath: /opt/app-root/src
       configMaps:
         - name: app-config-rhdh
-        - name: dashboard-config
     dynamicPluginsConfigMapName: dynamic-plugins
     extraEnvs:
       # Seems to be needed for the kubernetes api interaction
@@ -33,6 +32,7 @@ spec:
       mountPath: /opt/app-root/src
       configMaps:
         - name: rbac-policy
+        - name: dashboard-config
     route:
       enabled: true
   deployment:
