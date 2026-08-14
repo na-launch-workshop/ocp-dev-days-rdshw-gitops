@@ -15,11 +15,6 @@ data:
         "isExpanded": true,
         "links": [
           {
-            "iconUrl": "/homepage/icons/icons8/openshift.png",
-            "label": "OpenShift Console",
-            "url": "https://console-openshift-console.{{ .Values.cluster.subdomain }}"
-          },
-          {
             "iconUrl": "https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/devspaces.png",
             "label": "OpenShift Dev Spaces",
             "url": "https://devspaces.{{ .Values.cluster.subdomain }}"
@@ -55,6 +50,11 @@ data:
         "title": "Infrastructure",
         "isExpanded": false,
         "links": [
+          {
+            "iconUrl": "/homepage/icons/icons8/openshift.png",
+            "label": "OpenShift Web Console",
+            "url": "https://console-openshift-console.{{ .Values.cluster.subdomain }}"
+          },
           {
             "iconUrl": "https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/easteregg.png",
             "label": "Easter Egg!",
