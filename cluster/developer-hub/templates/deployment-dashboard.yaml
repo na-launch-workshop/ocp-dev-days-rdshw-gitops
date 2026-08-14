@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-server
+  namespace: rhdh
+  labels:
+    app.kubernetes.io/name: dashboard-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard-server
+  template:
+    metadata:
+      labels:
+        app: dashboard-server
+    spec:
+      containers:
+        - name: httpd
+          image: registry.access.redhat.com/ubi9/python-311:latest
+          command: ['python3', '-m', 'http.server', '8080', '--directory', '/opt/dashboard']
+          ports:
+            - containerPort: 8080
+          volumeMounts:
+            - name: dashboard
+              mountPath: /opt/dashboard
+      volumes:
+        - name: dashboard
+          configMap:
+            name: dashboard-config
