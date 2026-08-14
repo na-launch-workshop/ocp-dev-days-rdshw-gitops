@@ -126,6 +126,10 @@ data:
         say that this instance may not expose that data, then offer **general** guidance from official Red Hat
         Developer Hub or Backstage documentation—or ask a short clarifying question if the request is ambiguous.
 
+    homepage:
+      quickAccess:
+        title: Quick Access
+
     signInPage: oidc
     auth:
       session:
