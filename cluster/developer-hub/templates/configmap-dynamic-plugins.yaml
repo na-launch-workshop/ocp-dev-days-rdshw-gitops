@@ -376,9 +376,9 @@ data:
                     importName: QuickAccessCard
                     config:
                       layouts:
-                        xl: { w: 6, h: 8 }
-                        lg: { w: 6, h: 8 }
-                        md: { w: 6, h: 8 }
+                        xl: { w: 7, h: 8 }
+                        lg: { w: 7, h: 8 }
+                        md: { w: 7, h: 8 }
                         sm: { w: 12, h: 8 }
                         xs: { w: 12, h: 8 }
                         xxs: { w: 12, h: 8 }
@@ -386,44 +386,29 @@ data:
                     importName: Markdown
                     config:
                       layouts:
-                        xl: { w: 6, h: 4, x: 6 }
-                        lg: { w: 6, h: 4, x: 6 }
-                        md: { w: 6, h: 4, x: 6 }
-                        sm: { w: 12, h: 4 }
-                        xs: { w: 12, h: 4 }
-                        xxs: { w: 12, h: 4 }
+                        xl: { w: 5, h: 8, x: 7 }
+                        lg: { w: 5, h: 8, x: 7 }
+                        md: { w: 5, h: 8, x: 7 }
+                        sm: { w: 12, h: 8 }
+                        xs: { w: 12, h: 8 }
+                        xxs: { w: 12, h: 8 }
                       props:
-                        title: Explore your Software Catalog
+                        title: About Red Hat Developer Hub
                         content: |
-                          - [All](/catalog)
-                          - [Components](/catalog?filters[kind]=component)
-                          - [APIs](/catalog?filters[kind]=api)
-                          - [Systems](/catalog?filters[kind]=system)
-                          - [Domains](/catalog?filters[kind]=domain)
-                          - [Resources](/catalog?filters[kind]=resource)
-                          - [Groups](/catalog?filters[kind]=group)
-                  - mountPoint: home.page/cards
-                    importName: Markdown
-                    config:
-                      layouts:
-                        xl: { w: 6, h: 4, x: 6 }
-                        lg: { w: 6, h: 4, x: 6 }
-                        md: { w: 6, h: 4, x: 6 }
-                        sm: { w: 12, h: 4 }
-                        xs: { w: 12, h: 4 }
-                        xxs: { w: 12, h: 4 }
-                      props:
-                        title: Explore your Templates
-                        content: |
-                          - [Create a new component](/create)
-                          - [View all templates](/create?filters[kind]=template)
+                          Red Hat Developer Hub provides an enterprise-grade internal developer portal that improves developer collaboration and accelerates innovation with a centralized, self-service platform. By unifying tools, documentation, and best practices, it enables developers to focus on building and delivering value while ensuring security and compliance at scale.
+
+                          - Improves developer and application onboarding
+                          - Streamlines development workflows
+                          - Drives innovation at scale
+
+                          [Watch a demo](https://developers.redhat.com/demos/get-started-red-hat-developer-hub-software-catalog) on getting started with the Red Hat Developer Hub software catalog.
                   - mountPoint: home.page/cards
                     importName: CatalogStarredEntitiesCard
                     config:
                       layouts:
-                        xl: { w: 6, h: 4 }
-                        lg: { w: 6, h: 4 }
-                        md: { w: 6, h: 4 }
+                        xl: { w: 5, h: 4, x: 7 }
+                        lg: { w: 5, h: 4, x: 7 }
+                        md: { w: 5, h: 4, x: 7 }
                         sm: { w: 12, h: 4 }
                         xs: { w: 12, h: 4 }
                         xxs: { w: 12, h: 4 }
