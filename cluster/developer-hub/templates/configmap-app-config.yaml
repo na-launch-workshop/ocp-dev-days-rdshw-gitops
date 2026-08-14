@@ -129,7 +129,37 @@ data:
     homepage:
       quickAccess:
         title: Quick Access
-        path: /opt/app-root/src/dashboard.yaml
+        data:
+          - title: Developer Tools
+            isExpanded: true
+            links:
+              - iconUrl: /homepage/icons/icons8/openshift.png
+                label: OpenShift Console
+                url: https://console-openshift-console.{{ .Values.cluster.subdomain }}
+              - iconUrl: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/devspaces.png
+                label: OpenShift Dev Spaces
+                url: https://devspaces.{{ .Values.cluster.subdomain }}
+              - iconUrl: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/gitlab.png
+                label: GitLab
+                url: https://gitlab-gitlab.{{ .Values.cluster.subdomain }}
+              - iconUrl: /homepage/icons/argo-icon-color.svg
+                label: Argo CD
+                url: https://openshift-gitops-server-openshift-gitops.{{ .Values.cluster.subdomain }}
+              - iconUrl: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/jaeger.png
+                label: Jaeger UI - Grafana Tempo
+                url: https://tempo-tempo-jaegerui-tempo.{{ .Values.cluster.subdomain }}
+              - iconUrl: /homepage/icons/quay.svg
+                label: Quay
+                url: https://quay.{{ .Values.cluster.subdomain }}
+              - iconUrl: /homepage/icons/sonarqube.svg
+                label: SonarQube
+                url: https://sonarqube-sonarqube.{{ .Values.cluster.subdomain }}
+          - title: Infrastructure
+            isExpanded: false
+            links:
+              - iconUrl: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/easteregg.png
+                label: Easter Egg!
+                url: https://redhat.com/
 
     signInPage: oidc
     auth:
