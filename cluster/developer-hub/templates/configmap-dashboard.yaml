@@ -52,7 +52,7 @@ data:
         "links": [
           {
             "iconUrl": "/homepage/icons/icons8/openshift.png",
-            "label": "OpenShift Web Console",
+            "label": "OpenShift Console",
             "url": "https://console-openshift-console.{{ .Values.cluster.subdomain }}"
           },
           {
