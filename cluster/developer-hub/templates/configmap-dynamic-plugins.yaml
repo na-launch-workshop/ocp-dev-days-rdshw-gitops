@@ -383,15 +383,15 @@ data:
                         xs: { w: 12, h: 8 }
                         xxs: { w: 12, h: 8 }
                   - mountPoint: home.page/cards
-                    importName: Markdown
+                    importName: FeaturedDocsCard
                     config:
                       layouts:
-                        xl: { w: 5, h: 8, x: 7 }
-                        lg: { w: 5, h: 8, x: 7 }
-                        md: { w: 5, h: 8, x: 7 }
-                        sm: { w: 12, h: 8 }
-                        xs: { w: 12, h: 8 }
-                        xxs: { w: 12, h: 8 }
+                        xl: { w: 5, h: 4, x: 7 }
+                        lg: { w: 5, h: 4, x: 7 }
+                        md: { w: 5, h: 4, x: 7 }
+                        sm: { w: 12, h: 4 }
+                        xs: { w: 12, h: 4 }
+                        xxs: { w: 12, h: 4 }
                       props:
                         title: About Red Hat Developer Hub
                         content: |
@@ -401,7 +401,7 @@ data:
                           - Streamlines development workflows
                           - Drives innovation at scale
 
-                          [Watch a demo](https://developers.redhat.com/demos/get-started-red-hat-developer-hub-software-catalog) on getting started with the Red Hat Developer Hub software catalog.
+                          <a href="https://developers.redhat.com/demos/get-started-red-hat-developer-hub-software-catalog" target="_blank" rel="noopener noreferrer">Watch a demo</a> on getting started with the Red Hat Developer Hub software catalog.
                   - mountPoint: home.page/cards
                     importName: CatalogStarredEntitiesCard
                     config:
