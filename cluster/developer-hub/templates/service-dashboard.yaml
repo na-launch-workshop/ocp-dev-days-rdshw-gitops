@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-server
+  namespace: rhdh
+  labels:
+    app.kubernetes.io/name: dashboard-server
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+spec:
+  selector:
+    app: dashboard-server
+  ports:
+    - port: 8080
+      targetPort: 8080

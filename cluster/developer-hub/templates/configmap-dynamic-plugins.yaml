@@ -242,18 +242,9 @@ data:
                     importName: MenuItemLink
                     config:
                       section: Developer Tools
-                      priority: 100
-                      props:
-                        title: Developer Hub Local
-                        icon: developerHub
-                        link: https://github.com/redhat-developer/rhdh-local
-                  - mountPoint: global.header/application-launcher
-                    importName: MenuItemLink
-                    config:
-                      section: Developer Tools
                       priority: 90
                       props:
-                        title: DevSpaces
+                        title: OpenShift Dev Spaces
                         icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 38 38" xmlns:v="https://vecta.io/nano"><path d="M10 1a9 9 0 0 0-9 9v18a9 9 0 0 0 9 9h18a9 9 0 0 0 9-9V10a9 9 0 0 0-9-9H10z" fill="#fff"/><path d="M28 2.25A7.76 7.76 0 0 1 35.75 10v18A7.76 7.76 0 0 1 28 35.75H10A7.76 7.76 0 0 1 2.25 28V10A7.76 7.76 0 0 1 10 2.25h18M28 1H10a9 9 0 0 0-9 9v18a9 9 0 0 0 9 9h18a9 9 0 0 0 9-9V10a9 9 0 0 0-9-9h0z" fill="#e0e0e0"/><path d="M19 30.625A11.64 11.64 0 0 1 7.375 19 11.64 11.64 0 0 1 19 7.375 11.64 11.64 0 0 1 30.625 19 11.64 11.64 0 0 1 19 30.625zm0-22A10.39 10.39 0 0 0 8.625 19 10.39 10.39 0 0 0 19 29.375 10.39 10.39 0 0 0 29.375 19 10.39 10.39 0 0 0 19 8.625z" fill="#ed0000"/><path d="M26 24.625H12c-.345 0-.625-.28-.625-.625V14c0-.345.28-.625.625-.625h14c.345 0 .625.28.625.625v10c0 .345-.28.625-.625.625zm-13.375-1.25h12.75v-8.75h-12.75v8.75z"/><path d="M18.539 21.758a.59.59 0 0 1-.131-.014c-.338-.071-.553-.403-.481-.741l.906-4.266a.62.62 0 0 1 .741-.481c.339.076.553.403.481.741l-.906 4.266c-.062.294-.322.495-.61.495zm2.967-.269c-.16 0-.32-.061-.442-.183a.63.63 0 0 1 0-.885l1.428-1.427-1.428-1.427a.63.63 0 0 1 0-.885c.244-.244.641-.244.885 0l1.869 1.869a.63.63 0 0 1 0 .885l-1.869 1.869c-.122.122-.282.183-.442.183zm-5.012 0c-.16 0-.32-.061-.442-.183l-1.869-1.869a.63.63 0 0 1 0-.885l1.869-1.869c.244-.244.641-.244.885 0a.63.63 0 0 1 0 .885l-1.428 1.427 1.428 1.427a.63.63 0 0 1 0 .885c-.122.122-.282.183-.442.183z" fill="#ed0000"/></svg>'
                         link: https://devspaces.{{ .Values.cluster.subdomain }}
                   - mountPoint: global.header/application-launcher
@@ -265,6 +256,24 @@ data:
                         title: GitLab
                         icon: '<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><title>file_type_gitlab</title><polygon points="16 28.896 16 28.896 21.156 13.029 10.844 13.029 16 28.896" style="fill:#e24329"/><polygon points="16 28.896 10.844 13.029 3.619 13.029 16 28.896" style="fill:#fc6d26"/><path d="M3.619,13.029h0L2.052,17.851a1.067,1.067,0,0,0,.388,1.193L16,28.9,3.619,13.029Z" style="fill:#fca326"/><path d="M3.619,13.029h7.225L7.739,3.473a.534.534,0,0,0-1.015,0L3.619,13.029Z" style="fill:#e24329"/><polygon points="16 28.896 21.156 13.029 28.381 13.029 16 28.896" style="fill:#fc6d26"/><path d="M28.381,13.029h0l1.567,4.822a1.067,1.067,0,0,1-.388,1.193L16,28.9,28.381,13.029Z" style="fill:#fca326"/><path d="M28.381,13.029H21.156l3.105-9.557a.534.534,0,0,1,1.015,0l3.105,9.557Z" style="fill:#e24329"/></svg>'
                         link: https://gitlab-gitlab.{{ .Values.cluster.subdomain }}
+                  - mountPoint: global.header/application-launcher
+                    importName: MenuItemLink
+                    config:
+                      section: Developer Tools
+                      priority: 80
+                      props:
+                        title: Argo CD
+                        icon: /homepage/icons/argo-icon-color.svg
+                        link: https://openshift-gitops-server-openshift-gitops.{{ .Values.cluster.subdomain }}
+                  - mountPoint: global.header/application-launcher
+                    importName: MenuItemLink
+                    config:
+                      section: Developer Tools
+                      priority: 80
+                      props:
+                        title: Jaeger UI - Grafana Tempo
+                        icon: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/jaeger.png
+                        link: https://tempo-tempo-jaegerui-tempo.{{ .Values.cluster.subdomain }}
                   - mountPoint: global.header/application-launcher
                     importName: MenuItemLink
                     config:
@@ -337,6 +346,52 @@ data:
                   - path: /image-registry
                     title: Image Registry
                     mountPoint: entity.page.image-registry
+
+      # Dynamic Home Page
+      - package: ./dynamic-plugins/dist/red-hat-developer-hub-backstage-plugin-dynamic-home-page
+        disabled: false
+        pluginConfig:
+          dynamicPlugins:
+            frontend:
+              red-hat-developer-hub.backstage-plugin-dynamic-home-page:
+                dynamicRoutes:
+                  - path: /
+                    importName: DynamicHomePage
+                    config:
+                      props:
+                        title: '${HOMEPAGE_TITLE:-Red Hat Developer Hub}'
+                        subtitle: '${HOMEPAGE_SUBTITLE:-Welcome to Developer Hub!}'
+                mountPoints:
+                  - mountPoint: home.page/cards
+                    importName: SearchBar
+                    config:
+                      layouts:
+                        xl: { w: 10, h: 1, x: 1 }
+                        lg: { w: 10, h: 1, x: 1 }
+                        md: { w: 10, h: 1, x: 1 }
+                        sm: { w: 10, h: 1, x: 1 }
+                        xs: { w: 12, h: 1 }
+                        xxs: { w: 12, h: 1 }
+                  - mountPoint: home.page/cards
+                    importName: QuickAccessCard
+                    config:
+                      layouts:
+                        xl: { w: 8, h: 8 }
+                        lg: { w: 8, h: 8 }
+                        md: { w: 8, h: 8 }
+                        sm: { w: 12, h: 8 }
+                        xs: { w: 12, h: 8 }
+                        xxs: { w: 12, h: 8 }
+                  - mountPoint: home.page/cards
+                    importName: CatalogStarredEntitiesCard
+                    config:
+                      layouts:
+                        xl: { w: 4, h: 4, x: 8 }
+                        lg: { w: 4, h: 4, x: 8 }
+                        md: { w: 4, h: 4, x: 8 }
+                        sm: { w: 12, h: 4 }
+                        xs: { w: 12, h: 4 }
+                        xxs: { w: 12, h: 4 }  
 
       {{- if .Values.devMode }}
       # Dev-only plugins
