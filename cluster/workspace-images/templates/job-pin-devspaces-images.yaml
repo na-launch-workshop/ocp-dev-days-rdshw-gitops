@@ -1,0 +1,140 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dev-spaces-image-pin
+  namespace: openshift-devspaces
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-spaces-image-pin
+  namespace: openshift-devspaces
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups:
+      - operators.coreos.com
+    resources:
+      - clusterserviceversions
+    verbs:
+      - get
+      - list
+      - watch
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-spaces-image-pin
+  namespace: openshift-devspaces
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+subjects:
+  - kind: ServiceAccount
+    name: dev-spaces-image-pin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dev-spaces-image-pin
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: dev-spaces-image-pinned-image-sets
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+subjects:
+  - kind: ServiceAccount
+    name: dev-spaces-image-pin
+    namespace: openshift-devspaces
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pinned-image-sets
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dev-spaces-image-pin
+  namespace: openshift-devspaces
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: dev-spaces-image-pin
+      containers:
+        - name: dev-spaces-image-pin
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -x
+              CSV=""
+              until [[ ${CSV} != "" ]]
+              do
+                CSV=$(oc get csv  -o name | grep devspaces)
+                if [[ ${CSV} == "" ]]
+                  then sleep 15
+                fi
+              done
+              che_code=$(oc get ${CSV} -o jsonpath='{.spec.relatedImages[?(@.name=="editor_definition_che_code_latest_che_code_injector")].image}')
+              traefik=$(oc get ${CSV} -o jsonpath='{.spec.relatedImages[?(@.name=="single_host_gateway")].image}')
+              CSV=$(oc get csv -o name | grep devworkspace)
+              project_clone=$(oc get ${CSV} -o jsonpath='{.spec.relatedImages[?(@.name=="project_clone")].image}')
+              cat << EOF | oc apply -f -
+              apiVersion: machineconfiguration.openshift.io/v1
+              kind: PinnedImageSet
+              metadata:
+                name: devspaces-images-worker
+                labels:
+                  machineconfiguration.openshift.io/role: worker
+              spec:
+                pinnedImages:
+                - name: ${che_code}
+                - name: ${traefik}
+                - name: ${project_clone}
+              EOF
+              cat << EOF | oc apply -f -
+              apiVersion: machineconfiguration.openshift.io/v1
+              kind: PinnedImageSet
+              metadata:
+                name: devspaces-images-master
+                labels:
+                  machineconfiguration.openshift.io/role: master
+              spec:
+                pinnedImages:
+                - name: ${che_code}
+                - name: ${traefik}
+                - name: ${project_clone}
+              EOF
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

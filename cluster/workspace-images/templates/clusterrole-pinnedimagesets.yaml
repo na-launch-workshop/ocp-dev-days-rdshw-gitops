@@ -1,0 +1,22 @@
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pinned-image-sets
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+rules:
+  - apiGroups:
+      - machineconfiguration.openshift.io
+    resources:
+      - pinnedimagesets
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+      - deletecollection

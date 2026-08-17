@@ -300,13 +300,52 @@ data:
               - 404
 
         - name: Commit and push catalog-info.yaml
-          ansible.builtin.shell: |
-            cd /tmp/parasol-insurance-{{ "{{" }} tenant_username {{ "}}" }}
-            git add -A
-            git commit -m "chore: configure catalog-info for {{ "{{" }} tenant_username {{ "}}" }}"
-            git push origin main
-          environment:
-            GIT_SSL_NO_VERIFY: "true"
+          block:
+            - name: Commit and Push
+              ansible.builtin.shell: |
+                cd /tmp/parasol-insurance-{{ "{{" }} tenant_username {{ "}}" }}
+                git add -A
+                git commit -m "chore: configure catalog-info for {{ "{{" }} tenant_username {{ "}}" }}"
+                git push origin main
+              environment:
+                GIT_SSL_NO_VERIFY: "true"
+
+          rescue:
+            - name: Remediation - Explicitly protect main branch
+              ansible.builtin.uri:
+                url: https://{{ "{{" }} gitlab_host {{ "}}" }}/api/v4/projects/{{ "{{" }} tenant_username {{ "}}" }}%2Fparasol-insurance/protected_branches
+                method: POST
+                body_format: json
+                body:
+                  name: main
+                  push_access_level: 40
+                  merge_access_level: 40
+                  unprotect_access_level: 40
+                headers:
+                  PRIVATE-TOKEN: '{{ "{{" }} root_token {{ "}}" }}'
+                validate_certs: false
+                status_code:
+                  - 200
+                  - 201
+                  - 400
+
+            - name: Remediation — re-unprotect main branch
+              ansible.builtin.uri:
+                url: https://{{ "{{" }} gitlab_host {{ "}}" }}/api/v4/projects/{{ "{{" }} tenant_username {{ "}}" }}%2Fparasol-insurance/protected_branches/main
+                method: DELETE
+                headers:
+                  PRIVATE-TOKEN: '{{ "{{" }} root_token {{ "}}" }}'
+                validate_certs: false
+                status_code:
+                  - 204
+                  - 404
+
+            - name: Remediation — retry push after unprotecting branch
+              ansible.builtin.shell: |
+                cd /tmp/parasol-insurance-{{ "{{" }} tenant_username {{ "}}" }}
+                git push origin main
+              environment:
+                GIT_SSL_NO_VERIFY: "true"
 
         - name: Clean up cloned repo
           ansible.builtin.file:

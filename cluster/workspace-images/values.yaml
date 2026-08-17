@@ -1,5 +1,6 @@
 # Default values for workspace-images chart
 nameOverride: ""
+namespace: "workspace-images"
 
 # Git repository configuration
 git:

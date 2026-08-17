@@ -1,0 +1,126 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: openvsx-builder
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openvsx-builder
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+- apiGroups:
+    - build.openshift.io
+  resources:
+    - buildconfigs
+  verbs:
+    - get
+    - list
+    - watch
+- apiGroups:
+    - build.openshift.io
+  resources:
+    - builds
+    - buildconfigs/instantiate
+  verbs:
+    - create
+    - get
+    - list
+    - watch
+- apiGroups:
+    - build.openshift.io
+  resources:
+    - builds
+    - builds/log
+    - builds/details
+  verbs:
+    - get
+    - list
+    - watch
+    - update
+- apiGroups:
+    - image.openshift.io
+  resources:
+    - imagestreamtags
+    - imagestreams
+    - imagestreams/layers
+  verbs:
+    - get
+    - watch
+    - create
+    - update
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: openvsx-builder
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+subjects:
+  - kind: ServiceAccount
+    name: openvsx-builder
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: openvsx-builder
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: openvsx-uploader-build
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: openvsx-builder
+      containers:
+        - name: build-openvsx-uploader-image
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get imagestreamtag "openvsx-extension-uploader:latest"
+              do
+                echo "Waiting for openvsx-extension-uploader image build to complete"
+                oc start-build openvsx-extension-uploader -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

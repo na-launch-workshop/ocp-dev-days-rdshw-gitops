@@ -1,5 +1,5 @@
 gitlab:
-  image: quay.io/redhat-gpte/gitlab:17.4.1
+  image: quay.io/redhat-gpte/gitlab:17.11.7
   email:
     address: "gitlab@rhdemo.com"
     displayName: "GitLab Admin"

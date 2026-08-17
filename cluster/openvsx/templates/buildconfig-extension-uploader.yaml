@@ -22,5 +22,4 @@ spec:
     to:
       kind: ImageStreamTag
       name: openvsx-extension-uploader:latest
-  triggers:
-    - type: ConfigChange
+

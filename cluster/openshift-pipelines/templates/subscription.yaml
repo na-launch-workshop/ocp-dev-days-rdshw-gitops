@@ -3,12 +3,16 @@ apiVersion: operators.coreos.com/v1
 kind: OperatorGroup
 metadata:
   name: "{{ include "openshift-pipelines.name" . }}-operatorgroup"
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec: {}
 ---
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
   name: {{ include "openshift-pipelines.name" . }}-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
 spec:
   channel: {{ .Values.subscription.channel }}
   installPlanApproval: {{ .Values.subscription.installPlanApproval }}

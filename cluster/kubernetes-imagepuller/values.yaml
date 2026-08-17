@@ -1,8 +1,0 @@
-nameOverride: ""
-
-subscription:
-  channel: stable
-  installPlanApproval: Automatic
-  name: kubernetes-imagepuller-operator
-  source: community-operators
-  sourceNamespace: openshift-marketplace

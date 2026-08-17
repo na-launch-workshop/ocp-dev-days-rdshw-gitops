@@ -2,6 +2,8 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: pipelines-installplan-approve
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   # ttlSecondsAfterFinished: 1200
   backoffLimit: 5
@@ -17,7 +19,7 @@ spec:
             - -c
             - |
               echo "Waiting for Pipelines InstallPlan to exist..."
-              
+
               install_plan=""
               until [[ ${install_plan} != "" ]]
               do

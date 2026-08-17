@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -x
 
 QUERY_RESULT_SIZE=600
 

@@ -38,7 +38,7 @@ spec:
           - ALL
       readOnlyRootFilesystem: false
       allowPrivilegeEscalation: true
-  steps:      
+  steps:
   - name: clone
     computeResources: {}
     image: {{ .Values.registry.hostname }}/{{ .Values.registry.namespace }}/{{ .Values.registry.builderImage }}:{{ .Values.registry.builderTag }}
@@ -78,8 +78,45 @@ spec:
       do
         IMAGE_NAME=$(yq e ".name" ${image})
         IMAGE_TAG=$(yq e ".version" ${image})
+        echo "${IMAGE_NAME}:${IMAGE_TAG}" >> ist.list
         IMAGE="$(params.registry)/$(params.registry-path)/${IMAGE_NAME}:${IMAGE_TAG}"
-        cekit --descriptor ${image} build podman --build-flag --volume --build-flag ${NODE_EXTRA_CA_CERTS}:${NODE_EXTRA_CA_CERTS}:ro,Z --build-arg NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS} --tag ${IMAGE}
-        podman push ${IMAGE}
-        podman image rm ${IMAGE}
-      done 
+        cekit --descriptor ${image} build podman --build-flag --volume --build-flag ${NODE_EXTRA_CA_CERTS}:${NODE_EXTRA_CA_CERTS}:ro,Z --build-arg NODE_EXTRA_CA_CERTS=${NODE_EXTRA_CA_CERTS} --build-flag --manifest --build-flag ${IMAGE}
+        podman manifest push ${IMAGE}
+        podman manifest rm ${IMAGE}
+      done
+  - name: create-pinnedimageset
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+    workingDir: "/workspace/source"
+    script: |
+      cd images/$(params.image-class)
+      cat << EOF > workspace-images-master.yaml
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: PinnedImageSet
+      metadata:
+        name: cekit-builder-images-master$(params.image-class)
+        labels:
+          machineconfiguration.openshift.io/role: master
+      spec:
+        pinnedImages:
+      EOF
+      cat << EOF > workspace-images-worker.yaml
+      apiVersion: machineconfiguration.openshift.io/v1
+      kind: PinnedImageSet
+      metadata:
+        name: cekit-builder-images-worker$(params.image-class)
+        labels:
+          machineconfiguration.openshift.io/role: worker
+      spec:
+        pinnedImages:
+      EOF
+
+      for ist in $(cat ist.list)
+      do
+        IMAGE_SHA=$(oc get imagestreamtag ${ist} -o jsonpath='{.image.metadata.name}')
+        IMAGE_NAME=$(echo ${ist} | cut -d":" -f1)
+        IMAGE_REF="$(params.registry)/$(params.registry-path)/${IMAGE_NAME}@${IMAGE_SHA}"
+        echo "  - name: ${IMAGE_REF}" >> workspace-images-worker.yaml
+        echo "  - name: ${IMAGE_REF}" >> workspace-images-master.yaml
+      done
+      oc apply -f workspace-images-master.yaml
+      oc apply -f workspace-images-worker.yaml
