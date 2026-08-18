@@ -7,9 +7,9 @@ metadata:
     haproxy.router.openshift.io/timeout: "120s"
 spec:
   port:
-    targetPort: oauth-proxy
+    targetPort: jaeger-ui
   tls:
-    termination: reencrypt
+    termination: edge
   to:
     kind: Service
     name: tempo-tempo-query-frontend
