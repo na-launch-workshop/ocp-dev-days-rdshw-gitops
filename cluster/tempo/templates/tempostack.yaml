@@ -17,9 +17,3 @@ spec:
         authentication:
           enabled: true
         enabled: true
-        ingress:
-          route:
-            annotations:
-              haproxy.router.openshift.io/timeout: 120s
-            termination: edge
-          type: route
