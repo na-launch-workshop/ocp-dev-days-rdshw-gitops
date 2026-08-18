@@ -15,5 +15,5 @@ spec:
         subscription:
           source: {{ include "app-of-apps.operatorSource" . }}
         tempo:
-          host: tempo-tempo-jaegerui-{{ .Values.tempo.namespace }}.{{ .Values.cluster.subdomain }}
+          host: tempo-tempo-query-frontend-{{ .Values.tempo.namespace }}.{{ .Values.cluster.subdomain }}
 {{ include "app-of-apps.syncPolicy" . | indent 2 }}
