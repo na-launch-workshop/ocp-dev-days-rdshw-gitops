@@ -36,7 +36,7 @@ rules:
     resources: ["routes", "routes/custom-host"]
     verbs: ["*"]
   - apiGroups: ["build.openshift.io"]
-    resources: ["builds", "buildconfigs", "buildconfigs/webhooks"]
+    resources: ["builds", "buildconfigs", "buildconfigs/webhooks", "buildconfigs/instantiatebinary"]
     verbs: ["*"]
   - apiGroups: ["image.openshift.io"]
     resources: ["imagestreams", "imagestreamtags", "imagestreamimages"]
