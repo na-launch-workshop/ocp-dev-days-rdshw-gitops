@@ -62,3 +62,7 @@ rules:
   - apiGroups: ["external-secrets.io"]
     resources: ["externalsecrets"]
     verbs: ["get", "list", "watch"]
+  # Monitoring
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors"]
+    verbs: ["create", "get", "list", "update", "delete", "patch"]
