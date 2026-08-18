@@ -10,6 +10,11 @@ subscription:
 
 tempoStack:
   namespace: tempo
+  storageSize: 10Gi
+  obc:
+    name: tempostack-dev-odf
+    storageClassName: openshift-storage.noobaa.io
+    endpoint: https://s3.openshift-storage.svc
 
 tempo:
   host: ""

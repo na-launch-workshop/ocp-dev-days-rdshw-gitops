@@ -1,0 +1,10 @@
+apiVersion: objectbucket.io/v1alpha1
+kind: ObjectBucketClaim
+metadata:
+  name: {{ .Values.tempoStack.obc.name }}
+  namespace: {{ .Values.tempoStack.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  storageClassName: {{ .Values.tempoStack.obc.storageClassName }}
+  generateBucketName: {{ .Values.tempoStack.obc.name }}

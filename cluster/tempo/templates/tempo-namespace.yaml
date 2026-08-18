@@ -1,13 +1,16 @@
 apiVersion: v1
-kind: Namespace
+kind: Project
 metadata:
-  name: openshift-tempo-operator
   annotations:
     argocd.argoproj.io/sync-wave: "-3"
+  labels:
+    kubernetes.io/metadata.name: openshift-tempo-operator
+    openshift.io/cluster-monitoring: "true"
+  name: openshift-tempo-operator
 ---
 apiVersion: v1
-kind: Namespace
+kind: Project
 metadata:
-  name: {{ .Values.tempoStack.namespace }}
   annotations:
     argocd.argoproj.io/sync-wave: "-3"
+  name: {{ .Values.tempoStack.namespace }}
