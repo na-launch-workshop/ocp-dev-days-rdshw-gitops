@@ -14,7 +14,11 @@ spec:
         CHE_FORCE_REFRESH_PERSONAL_ACCESS_TOKEN: "true"
       debug: false
       logLevel: INFO
-    dashboard: {}
+    dashboard:
+      deployment:
+        containers:
+          - image: 'quay.io/redhat-user-workloads/devspaces-tenant/devspaces/dashboard-rhel9:fd837ebcee840e2d42b49e24dbffc0dafa2e3aa2'
+      logLevel: INFO
     devWorkspace: {}
     devfileRegistry: {}
     imagePuller:
