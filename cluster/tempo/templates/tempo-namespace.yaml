@@ -1,5 +1,5 @@
-apiVersion: project.openshift.io/v1
-kind: Project
+apiVersion: v1
+kind: Namespace
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-3"
@@ -8,8 +8,8 @@ metadata:
     openshift.io/cluster-monitoring: "true"
   name: openshift-tempo-operator
 ---
-apiVersion: project.openshift.io/v1
-kind: Project
+apiVersion: v1
+kind: Namespace
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-3"
