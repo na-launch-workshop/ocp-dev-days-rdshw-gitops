@@ -1,7 +1,7 @@
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
-  name: tempo-query-frontend
+  name: tempo-tempo-query-frontend
   namespace: {{ .Values.tempoStack.namespace }}
   annotations:
     haproxy.router.openshift.io/timeout: "120s"
