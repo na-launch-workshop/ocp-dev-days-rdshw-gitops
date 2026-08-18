@@ -62,7 +62,10 @@ rules:
   - apiGroups: ["external-secrets.io"]
     resources: ["externalsecrets"]
     verbs: ["get", "list", "watch"]
-  # Monitoring
+  # Monitoring for OpenTelemetry module content
   - apiGroups: ["monitoring.coreos.com"]
-    resources: ["servicemonitors"]
+    resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+    verbs: ["create", "get", "list", "update", "delete", "patch"]
+  - apiGroups: ["opentelemetry.io"]
+    resources: ["opentelemetrycollectors"]
     verbs: ["create", "get", "list", "update", "delete", "patch"]
