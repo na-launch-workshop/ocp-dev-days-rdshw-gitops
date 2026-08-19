@@ -8,11 +8,8 @@ metadata:
 spec:
   storage:
     secret:
-      name: {{ .Values.tempoStack.obc.name }}-tempostack
+      name: tempostack-storage
       type: s3
-    tls:
-      caName: tempo-serving-ca
-      enabled: true
   storageSize: {{ .Values.tempoStack.storageSize }}
   template:
     queryFrontend:

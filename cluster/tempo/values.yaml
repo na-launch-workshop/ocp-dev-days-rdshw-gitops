@@ -11,10 +11,13 @@ subscription:
 tempoStack:
   namespace: tempo
   storageSize: 10Gi
-  obc:
-    name: tempostack-dev-odf
-    storageClassName: openshift-storage.noobaa.io
-    endpoint: https://s3.openshift-storage.svc
+
+minio:
+  image: quay.io/minio/minio:latest
+  rootUser: minio
+  rootPassword: minio123
+  bucket: tempo
+  storageSize: 10Gi
 
 tempo:
   host: ""
