@@ -1,5 +1,5 @@
 apiVersion: tempo.grafana.com/v1alpha1
-kind: TempoMonolithic
+kind: TempoStack
 metadata:
   name: tempo
   namespace: {{ .Values.tempoStack.namespace }}
@@ -7,9 +7,13 @@ metadata:
     argocd.argoproj.io/sync-wave: "5"
 spec:
   storage:
-    traces:
-      backend: memory
-  jaegerui:
-    enabled: true
-    route:
-      enabled: true
+    secret:
+      name: tempostack-storage
+      type: s3
+  storageSize: {{ .Values.tempoStack.storageSize }}
+  template:
+    queryFrontend:
+      jaegerQuery:
+        authentication:
+          enabled: true
+        enabled: true

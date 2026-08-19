@@ -3,10 +3,10 @@ kind: ClusterRole
 metadata:
   name: tenant-user
 rules:
-  # Secrets: list/watch only, no get (can't view contents)
+  # Secrets
   - apiGroups: [""]
     resources: ["secrets"]
-    verbs: ["watch"]
+    verbs: ["get", "watch"]
   # Core resources
   - apiGroups: [""]
     resources: ["configmaps", "endpoints", "persistentvolumeclaims", "pods", "pods/log", "pods/attach", "pods/exec", "pods/portforward", "replicationcontrollers", "services", "services/proxy", "serviceaccounts"]
@@ -36,7 +36,7 @@ rules:
     resources: ["routes", "routes/custom-host"]
     verbs: ["*"]
   - apiGroups: ["build.openshift.io"]
-    resources: ["builds", "buildconfigs", "buildconfigs/webhooks"]
+    resources: ["builds", "builds/log", "buildconfigs", "buildconfigs/webhooks", "buildconfigs/instantiatebinary"]
     verbs: ["*"]
   - apiGroups: ["image.openshift.io"]
     resources: ["imagestreams", "imagestreamtags", "imagestreamimages"]
@@ -62,3 +62,13 @@ rules:
   - apiGroups: ["external-secrets.io"]
     resources: ["externalsecrets"]
     verbs: ["get", "list", "watch"]
+  # Monitoring for OpenTelemetry module content
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["servicemonitors", "podmonitors", "prometheusrules"]
+    verbs: ["create", "get", "list", "update", "delete", "patch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["opentelemetry.io"]
+    resources: ["opentelemetrycollectors"]
+    verbs: ["create", "get", "list", "update", "delete", "patch"]

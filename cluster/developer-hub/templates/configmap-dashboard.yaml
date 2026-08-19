@@ -32,7 +32,7 @@ data:
           {
             "iconUrl": "https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/jaeger.png",
             "label": "Jaeger UI - Grafana Tempo",
-            "url": "https://tempo-tempo-jaegerui-tempo.{{ .Values.cluster.subdomain }}"
+            "url": "https://tempo-tempo-query-frontend-tempo.{{ .Values.cluster.subdomain }}"
           },
           {
             "iconUrl": "/homepage/icons/quay.svg",

@@ -273,7 +273,7 @@ data:
                       props:
                         title: Jaeger UI - Grafana Tempo
                         icon: https://raw.githubusercontent.com/na-launch-workshop/workshop-catalog-entities/main/images/jaeger.png
-                        link: https://tempo-tempo-jaegerui-tempo.{{ .Values.cluster.subdomain }}
+                        link: https://tempo-tempo-query-frontend-tempo.{{ .Values.cluster.subdomain }}
                   - mountPoint: global.header/application-launcher
                     importName: MenuItemLink
                     config:

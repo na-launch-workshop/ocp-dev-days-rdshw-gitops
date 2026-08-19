@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: tempostack-storage
+  namespace: {{ .Values.tempoStack.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+type: Opaque
+stringData:
+  endpoint: http://minio.{{ .Values.tempoStack.namespace }}.svc:9000
+  bucket: {{ .Values.minio.bucket }}
+  access_key_id: {{ .Values.minio.rootUser }}
+  access_key_secret: {{ .Values.minio.rootPassword }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-setup
+  namespace: {{ .Values.tempoStack.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: quay.io/minio/mc:latest
+          env:
+            - name: MC_CONFIG_DIR
+              value: /tmp/.mc
+          command:
+            - /bin/sh
+            - -c
+            - |
+              until mc alias set myminio http://minio.{{ .Values.tempoStack.namespace }}.svc:9000 {{ .Values.minio.rootUser }} {{ .Values.minio.rootPassword }} 2>/dev/null; do
+                echo "Waiting for MinIO..."
+                sleep 3
+              done
+              mc mb --ignore-existing myminio/{{ .Values.minio.bucket }}
+              echo "Bucket '{{ .Values.minio.bucket }}' ready."

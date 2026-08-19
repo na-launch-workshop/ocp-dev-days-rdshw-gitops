@@ -10,6 +10,15 @@ subscription:
 
 tempoStack:
   namespace: tempo
+  storageSize: 10Gi
+
+minio:
+  image: quay.io/minio/minio:latest
+  rootUser: minio
+  rootPassword: minio123
+  bucket: tempo
+  storageSize: 10Gi
+  storageClassName: ocs-external-storagecluster-ceph-rbd-immediate
 
 tempo:
   host: ""
