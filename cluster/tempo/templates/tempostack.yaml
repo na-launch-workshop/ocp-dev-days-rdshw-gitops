@@ -10,6 +10,8 @@ spec:
     secret:
       name: {{ .Values.tempoStack.obc.name }}-tempostack
       type: s3
+    tls:
+      caName: tempo-serving-ca
   storageSize: {{ .Values.tempoStack.storageSize }}
   template:
     queryFrontend:
