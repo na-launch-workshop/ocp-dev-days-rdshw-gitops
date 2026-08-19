@@ -12,6 +12,7 @@ spec:
       type: s3
     tls:
       caName: tempo-serving-ca
+      enabled: true
   storageSize: {{ .Values.tempoStack.storageSize }}
   template:
     queryFrontend:
