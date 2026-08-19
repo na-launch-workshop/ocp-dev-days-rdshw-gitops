@@ -18,6 +18,7 @@ minio:
   rootPassword: minio123
   bucket: tempo
   storageSize: 10Gi
+  storageClassName: ocs-external-storagecluster-ceph-rbd-immediate
 
 tempo:
   host: ""
