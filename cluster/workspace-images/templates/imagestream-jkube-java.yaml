@@ -1,0 +1,21 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: jkube-java
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  lookupPolicy:
+    local: false
+  tags:
+  - annotations: null
+    from:
+      kind: DockerImage
+      name: quay.io/jkube/jkube-java:0.0.28
+    importPolicy:
+      importMode: Legacy
+    name: "0.0.28"
+    referencePolicy:
+      type: Source
