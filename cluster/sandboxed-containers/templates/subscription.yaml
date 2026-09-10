@@ -1,12 +1,3 @@
-apiVersion: operators.coreos.com/v1
-kind: OperatorGroup
-metadata:
-  name: openshift-sandboxed-containers-operator
-  namespace: openshift-sandboxed-containers-operator
-  annotations:
-    argocd.argoproj.io/sync-wave: "-2"
-spec: {}
----
 apiVersion: operators.coreos.com/v1alpha1
 kind: Subscription
 metadata:
