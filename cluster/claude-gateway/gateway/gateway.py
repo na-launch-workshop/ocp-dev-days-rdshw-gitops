@@ -10,11 +10,9 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from threading import Lock
 
-from anthropic import AnthropicVertex, beta_tool
+from anthropic import Anthropic, beta_tool
 
 
-GCP_PROJECT_ID = os.environ["GCP_PROJECT_ID"]
-GCP_REGION = os.environ.get("CLOUD_ML_REGION", "us-east5")
 SANDBOX_WORKDIR = Path(os.environ.get("SANDBOX_WORKDIR", "/tmp/sandbox"))
 EXEC_TIMEOUT = int(os.environ.get("EXEC_TIMEOUT_SECONDS", "30"))
 MAX_OUTPUT_BYTES = 64 * 1024
@@ -24,7 +22,7 @@ MAX_REQUESTS_PER_HOUR = int(os.environ.get("MAX_REQUESTS_PER_HOUR", "30"))
 
 SANDBOX_WORKDIR.mkdir(parents=True, exist_ok=True)
 
-client = AnthropicVertex(project_id=GCP_PROJECT_ID, region=GCP_REGION)
+client = Anthropic()
 
 rate_lock = Lock()
 rate_counters: dict[str, list[float]] = defaultdict(list)
@@ -175,7 +173,7 @@ sandbox on OpenShift. You can execute Python, Bash, and JavaScript code, \
 and read/write files within the sandbox working directory.
 
 Constraints:
-- No network access except to the Vertex AI API.
+- No network access except to the Anthropic API.
 - All file operations are confined to your sandbox working directory.
 - Code execution has a timeout; long-running processes will be killed.
 - The environment is ephemeral — files do not persist between sessions.
@@ -283,8 +281,6 @@ def main():
     port = int(os.environ.get("PORT", "8080"))
     server = HTTPServer(("0.0.0.0", port), AgentHandler)
     print(f"Gateway listening on :{port}")
-    print(f"  GCP project: {GCP_PROJECT_ID}")
-    print(f"  Vertex region: {GCP_REGION}")
     print(f"  Token TTL: {TOKEN_TTL_SECONDS}s")
     print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user")
     server.serve_forever()

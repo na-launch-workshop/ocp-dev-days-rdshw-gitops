@@ -16,14 +16,7 @@ spec:
       labels:
         app.kubernetes.io/name: claude-gateway
         app.kubernetes.io/part-of: claude-sandbox
-      annotations:
-        vault.hashicorp.com/agent-inject: "true"
-        vault.hashicorp.com/role: {{ .Values.vault.role | quote }}
-        vault.hashicorp.com/agent-inject-secret-gcp-sa.json: {{ .Values.vault.secretPath | quote }}
-        vault.hashicorp.com/agent-inject-template-gcp-sa.json: |
-          {{`{{- with secret `}}{{ .Values.vault.secretPath | quote }}{{` -}}`}}
-          {{`{{ .Data.data.key }}`}}
-          {{`{{- end -}}`}}
+      annotations: {}
     spec:
       runtimeClassName: kata
       serviceAccountName: claude-agent
@@ -47,12 +40,10 @@ spec:
             capabilities:
               drop: ["ALL"]
           envFrom:
-            - configMapRef:
-                name: claude-gcp-auth
+            - secretRef:
+                name: claude-auth
                 optional: true
           env:
-            - name: GOOGLE_APPLICATION_CREDENTIALS
-              value: /vault/secrets/gcp-sa.json
             - name: SANDBOX_WORKDIR
               value: /tmp/sandbox
             - name: TOKEN_TTL_SECONDS

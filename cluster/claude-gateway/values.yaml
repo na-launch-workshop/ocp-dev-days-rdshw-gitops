@@ -14,10 +14,6 @@ gateway:
       cpu: "4"
       memory: 8Gi
 
-vault:
-  role: claude-agent
-  secretPath: secret/data/claude-sandbox/gcp-sa
-
 quota:
   pods: "10"
   requestsCPU: "8"

@@ -1,0 +1,16 @@
+# ------------------------------------------------------------------------------
+# To apply the Claude API key:
+# - Uncomment the Secret below and set your ANTHROPIC_API_KEY
+# - Apply with: oc apply -f configmap-claude-auth.yaml
+# - Restart the claude-gateway pod
+# ------------------------------------------------------------------------------
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: claude-auth
+#   namespace: claude-sandbox
+#   labels:
+#     app.kubernetes.io/part-of: claude-sandbox
+# type: Opaque
+# stringData:
+#   ANTHROPIC_API_KEY: "sk-ant-your-key-here"
