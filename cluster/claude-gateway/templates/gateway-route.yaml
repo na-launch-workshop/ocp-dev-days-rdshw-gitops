@@ -3,6 +3,8 @@ kind: Route
 metadata:
   name: claude-gateway
   namespace: {{ .Values.namespace }}
+  annotations:
+    haproxy.router.openshift.io/timeout: 300s
   labels:
     app.kubernetes.io/name: claude-gateway
     app.kubernetes.io/part-of: claude-sandbox
