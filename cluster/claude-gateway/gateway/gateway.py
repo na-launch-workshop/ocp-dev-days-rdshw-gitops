@@ -185,6 +185,8 @@ writing files and then executing them for complex tasks."""
 # --- HTTP handler ---
 
 class AgentHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def _send_json(self, status: int, body: dict):
         data = json.dumps(body).encode()
         self.send_response(status)
