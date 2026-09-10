@@ -22,11 +22,18 @@ spec:
         - port: 8080
           protocol: TCP
   egress:
-    - ports:
-        - port: 53
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-dns
+      ports:
+        - port: 5353
           protocol: UDP
-        - port: 53
+        - port: 5353
           protocol: TCP
-    - ports:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
         - port: 443
           protocol: TCP
