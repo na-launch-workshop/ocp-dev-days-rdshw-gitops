@@ -3,6 +3,8 @@ kind: BuildConfig
 metadata:
   name: claude-gateway
   namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
   labels:
     app.kubernetes.io/name: claude-gateway
     app.kubernetes.io/part-of: claude-sandbox
@@ -29,6 +31,8 @@ kind: ImageStream
 metadata:
   name: claude-gateway
   namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
   labels:
     app.kubernetes.io/name: claude-gateway
     app.kubernetes.io/part-of: claude-sandbox
