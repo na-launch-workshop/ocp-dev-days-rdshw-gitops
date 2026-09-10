@@ -1,0 +1,81 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: claude-dev-tools
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM parasol-insurance:latest
+      USER 0
+      RUN curl -fsSL https://claude.ai/install.sh | bash
+      USER 1001
+  strategy:
+    type: Docker
+    dockerStrategy:
+      from:
+        kind: ImageStreamTag
+        name: parasol-insurance:latest
+  output:
+    to:
+      kind: ImageStreamTag
+      name: claude-dev-tools:latest
+  runPolicy: Serial
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: claude-dev-tools-build
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: cekit-builder
+      containers:
+        - name: build-claude-dev-tools
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get istag claude-dev-tools:latest
+              do
+                echo "Waiting for claude-dev-tools image build to complete"
+                oc start-build claude-dev-tools -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
