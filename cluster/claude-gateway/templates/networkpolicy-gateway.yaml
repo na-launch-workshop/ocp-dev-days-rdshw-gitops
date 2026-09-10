@@ -15,6 +15,9 @@ spec:
         - namespaceSelector:
             matchLabels:
               app.kubernetes.io/part-of: che.eclipse.org
+        - namespaceSelector:
+            matchLabels:
+              network.openshift.io/policy-group: ingress
       ports:
         - port: 8080
           protocol: TCP
