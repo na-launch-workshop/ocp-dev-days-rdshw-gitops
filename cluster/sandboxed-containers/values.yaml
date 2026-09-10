@@ -9,6 +9,6 @@ subscription:
   startingCSV: ""
 
 kataconfig:
-  checkNodeEligibility: true
+  checkNodeEligibility: false
   enablePeerPods: false
   logLevel: info
