@@ -1,0 +1,44 @@
+schemaVersion: 2.2.0
+metadata:
+  name: claude-sandbox-demo
+  displayName: Claude Agent Sandbox Demo
+  description: Pre-configured workspace with the Claude agent CLI client
+  tags:
+    - python
+    - ai
+    - demo
+
+components:
+  - name: dev
+    container:
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      memoryLimit: 2Gi
+      cpuLimit: "1"
+      mountSources: true
+      env:
+        - name: CLAUDE_GATEWAY_URL
+          value: http://claude-gateway.claude-sandbox.svc:8080
+
+commands:
+  - id: register
+    exec:
+      component: dev
+      commandLine: python ${PROJECT_SOURCE}/claude-client.py register ${DEVWORKSPACE_CREATOR}
+      workingDir: ${PROJECT_SOURCE}
+      label: "Register with Claude gateway"
+      group:
+        kind: run
+
+  - id: run-prompt
+    exec:
+      component: dev
+      commandLine: |
+        echo "Enter your prompt:" && read PROMPT && python ${PROJECT_SOURCE}/claude-client.py run "$PROMPT"
+      workingDir: ${PROJECT_SOURCE}
+      label: "Run a Claude prompt"
+      group:
+        kind: run
+
+events:
+  postStart:
+    - register

@@ -1,0 +1,14 @@
+nameOverride: ""
+
+subscription:
+  channel: stable
+  installPlanApproval: Automatic
+  name: sandboxed-containers-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+  startingCSV: ""
+
+kataconfig:
+  checkNodeEligibility: true
+  enablePeerPods: false
+  logLevel: info

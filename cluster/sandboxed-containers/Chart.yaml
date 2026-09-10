@@ -1,0 +1,5 @@
+apiVersion: v2
+name: sandboxed-containers
+description: A Helm chart for OpenShift sandboxed containers operator
+type: application
+version: 0.1.0

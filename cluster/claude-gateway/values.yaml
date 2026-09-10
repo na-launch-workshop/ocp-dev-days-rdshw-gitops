@@ -1,0 +1,26 @@
+namespace: claude-sandbox
+
+gateway:
+  replicas: 2
+  image: image-registry.openshift-image-registry.svc:5000/claude-sandbox/claude-gateway:latest
+  tokenTTLSeconds: "14400"
+  maxRequestsPerHour: "30"
+  signingKey: "REPLACE_ME"
+  resources:
+    requests:
+      cpu: "1"
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi
+
+vault:
+  role: claude-agent
+  secretPath: secret/data/claude-sandbox/gcp-sa
+
+quota:
+  pods: "10"
+  requestsCPU: "8"
+  requestsMemory: 16Gi
+  limitsCPU: "16"
+  limitsMemory: 32Gi

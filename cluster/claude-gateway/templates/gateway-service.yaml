@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: claude-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/name: claude-gateway
+    app.kubernetes.io/part-of: claude-sandbox
+spec:
+  selector:
+    app.kubernetes.io/name: claude-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-signing-key
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: claude-sandbox
+type: Opaque
+stringData:
+  key: {{ .Values.gateway.signingKey | quote }}

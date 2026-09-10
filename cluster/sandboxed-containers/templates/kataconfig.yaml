@@ -1,0 +1,10 @@
+apiVersion: kataconfiguration.openshift.io/v1
+kind: KataConfig
+metadata:
+  name: workshop-kataconfig
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  checkNodeEligibility: {{ .Values.kataconfig.checkNodeEligibility }}
+  enablePeerPods: {{ .Values.kataconfig.enablePeerPods }}
+  logLevel: {{ .Values.kataconfig.logLevel }}
