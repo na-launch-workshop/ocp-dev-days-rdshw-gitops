@@ -204,18 +204,26 @@ class AgentHandler(BaseHTTPRequestHandler):
         return validate_token(auth[7:])
 
     def do_GET(self):
-        if self.path == "/healthz":
-            self._send_json(200, {"status": "ok"})
-        else:
-            self._send_json(404, {"error": "not found"})
+        try:
+            if self.path == "/healthz":
+                self._send_json(200, {"status": "ok"})
+            else:
+                self._send_json(404, {"error": "not found"})
+        except Exception as e:
+            print(f"[error] GET {self.path}: {e}", flush=True)
+            self._send_json(500, {"error": str(e)})
 
     def do_POST(self):
-        if self.path == "/token":
-            self._handle_token()
-        elif self.path == "/run":
-            self._handle_run()
-        else:
-            self._send_json(404, {"error": "not found"})
+        try:
+            if self.path == "/token":
+                self._handle_token()
+            elif self.path == "/run":
+                self._handle_run()
+            else:
+                self._send_json(404, {"error": "not found"})
+        except Exception as e:
+            print(f"[error] POST {self.path}: {e}", flush=True)
+            self._send_json(500, {"error": str(e)})
 
     def _handle_token(self):
         """Issue a per-user token. Caller must present the OpenShift user header."""
@@ -227,7 +235,7 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "username required (X-Forwarded-User header or JSON body)"})
             return
         token_data = create_token(username)
-        print(f"[token] issued for user={username} expires={token_data['expires_at']}")
+        print(f"[token] issued for user={username} expires={token_data['expires_at']}", flush=True)
         self._send_json(200, token_data)
 
     def _handle_run(self):
@@ -249,7 +257,7 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._send_json(400, {"error": "prompt required"})
             return
 
-        print(f"[run] user={username} prompt={prompt[:80]}...")
+        print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
 
         tools = make_tools(username)
         messages = [{"role": "user", "content": prompt}]
@@ -270,11 +278,11 @@ class AgentHandler(BaseHTTPRequestHandler):
                         output_parts.append(block.text)
             self._send_json(200, {"user": username, "response": "\n".join(output_parts)})
         except Exception as e:
-            print(f"[error] user={username} error={e}")
+            print(f"[error] user={username} error={e}", flush=True)
             self._send_json(500, {"error": str(e)})
 
     def log_message(self, format, *args):
-        pass
+        print(f"[http] {self.client_address[0]} {format % args}", flush=True)
 
 
 def main():
