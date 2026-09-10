@@ -6,6 +6,8 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-2"
 spec:
+  targetNamespaces:
+    - openshift-sandboxed-containers-operator
   upgradeStrategy: Default
 ---
 apiVersion: operators.coreos.com/v1alpha1
