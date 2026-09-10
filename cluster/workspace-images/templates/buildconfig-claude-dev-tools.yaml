@@ -13,7 +13,6 @@ spec:
       FROM parasol-insurance:latest
       USER 0
       RUN curl -fsSL https://claude.ai/install.sh | bash
-      USER 1001
   strategy:
     type: Docker
     dockerStrategy:
