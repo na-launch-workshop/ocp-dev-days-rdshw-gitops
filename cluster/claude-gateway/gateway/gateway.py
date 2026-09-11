@@ -11,7 +11,7 @@ from pathlib import Path
 
 import aiohttp as aiohttp_client
 from aiohttp import web
-from anthropic import AsyncAnthropic, beta_tool
+from anthropic import AsyncAnthropic, beta_async_tool
 
 
 SANDBOX_WORKDIR = Path(os.environ.get("SANDBOX_WORKDIR", "/tmp/sandbox"))
@@ -160,7 +160,7 @@ async def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
 def make_tools(username: str):
     workdir = _user_workdir(username)
 
-    @beta_tool
+    @beta_async_tool
     async def execute_code(language: str, code: str) -> str:
         """Execute code in the sandboxed environment and return the output.
 
@@ -205,7 +205,7 @@ def make_tools(username: str):
         parts.append(f"exit code: {proc.returncode}")
         return "\n".join(parts)
 
-    @beta_tool
+    @beta_async_tool
     def read_file(path: str) -> str:
         """Read a file from the sandbox working directory.
 
@@ -220,7 +220,7 @@ def make_tools(username: str):
         content = target.read_text(errors="replace")
         return content[:MAX_OUTPUT_BYTES] + ("\n... (truncated)" if len(content) > MAX_OUTPUT_BYTES else "")
 
-    @beta_tool
+    @beta_async_tool
     def write_file(path: str, content: str) -> str:
         """Write content to a file in the sandbox working directory.
 
@@ -235,7 +235,7 @@ def make_tools(username: str):
         target.write_text(content)
         return f"Wrote {len(content)} bytes to {path}"
 
-    @beta_tool
+    @beta_async_tool
     def list_files(directory: str = ".") -> str:
         """List files in a directory within the sandbox.
 
@@ -254,7 +254,7 @@ def make_tools(username: str):
             lines.append(prefix + str(e.relative_to(workdir)))
         return "\n".join(lines) if lines else "(empty)"
 
-    @beta_tool
+    @beta_async_tool
     async def git_clone(repo_name: str) -> str:
         """Clone a GitLab repository into the sandbox and create a session branch.
 
@@ -302,7 +302,7 @@ def make_tools(username: str):
 
         return f"Cloned {repo_name}/\nSession branch: {branch}\nReady — use read_file/write_file to explore and edit."
 
-    @beta_tool
+    @beta_async_tool
     async def git_status() -> str:
         """Show uncommitted changes in the active repository."""
         repo = _active_repo_path(workdir)
@@ -313,7 +313,7 @@ def make_tools(username: str):
             return f"Error: {err}"
         return out.strip() or "(working tree clean)"
 
-    @beta_tool
+    @beta_async_tool
     async def git_commit(message: str) -> str:
         """Stage all changes and create a commit on the session branch.
 
@@ -331,7 +331,7 @@ def make_tools(username: str):
             return f"Error: git commit failed\n{err}"
         return out.strip() or "Committed."
 
-    @beta_tool
+    @beta_async_tool
     async def git_push() -> str:
         """Push the session branch to GitLab."""
         if not GITLAB_TOKEN:
@@ -350,7 +350,7 @@ def make_tools(username: str):
             return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
         return f"Pushed to origin/{branch}"
 
-    @beta_tool
+    @beta_async_tool
     async def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
         """Create a GitLab Merge Request from the session branch.
 
