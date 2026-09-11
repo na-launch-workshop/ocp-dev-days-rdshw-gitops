@@ -139,43 +139,36 @@ def repl(username: str):
     if RICH:
         console.print(Panel(
             "[bold]Commands:[/bold]\n"
-            "  Type your prompt and press Enter\n"
-            "  For multi-line input, end with [bold yellow]/send[/bold yellow] on its own line\n"
+            "  Type your prompt and press Enter to submit\n"
             "  [bold yellow]/reset[/bold yellow]  — clear conversation history\n"
             "  [bold yellow]/quit[/bold yellow]   — exit",
             title="[bold cyan]Claude Agent[/bold cyan]",
             border_style="cyan",
         ))
     else:
-        print("Claude Agent — type your prompt. /send for multi-line, /reset, /quit to exit.")
+        print("Claude Agent — type your prompt and press Enter. /reset, /quit to exit.")
 
     while True:
         if RICH:
-            console.print("\n[bold green]You[/bold green] [dim](type /send for multi-line):[/dim]")
+            console.print("\n[bold green]You:[/bold green]", end=" ")
         else:
             print("\nYou: ", end="", flush=True)
 
-        lines = []
-        while True:
-            try:
-                line = input()
-            except EOFError:
-                break
-            if line.strip() == "/send":
-                break
-            if line.strip() in ("/quit", "/exit", "exit", "quit") and not lines:
-                if RICH:
-                    console.print("[bold yellow]Goodbye![/bold yellow]")
-                else:
-                    print("Goodbye!")
-                return
-            if line.strip() == "/reset" and not lines:
-                reset()
-                break
-            lines.append(line)
+        try:
+            prompt = input().strip()
+        except EOFError:
+            break
 
-        prompt = "\n".join(lines).strip()
         if not prompt:
+            continue
+        if prompt in ("/quit", "/exit", "exit", "quit"):
+            if RICH:
+                console.print("[bold yellow]Goodbye![/bold yellow]")
+            else:
+                print("Goodbye!")
+            return
+        if prompt == "/reset":
+            reset()
             continue
 
         if RICH:
