@@ -139,26 +139,34 @@ def repl(username: str):
     if RICH:
         console.print(Panel(
             "[bold]Commands:[/bold]\n"
-            "  Type your prompt and press Enter to submit\n"
+            "  Type your prompt — press [bold yellow]Enter twice[/bold yellow] to submit\n"
+            "  Paste multi-line code freely, then hit Enter twice\n"
             "  [bold yellow]/reset[/bold yellow]  — clear conversation history\n"
             "  [bold yellow]/quit[/bold yellow]   — exit",
             title="[bold cyan]Claude Agent[/bold cyan]",
             border_style="cyan",
         ))
     else:
-        print("Claude Agent — type your prompt and press Enter. /reset, /quit to exit.")
+        print("Claude Agent — type prompt, press Enter twice to submit. /reset, /quit to exit.")
 
     while True:
         if RICH:
-            console.print("\n[bold green]You:[/bold green]", end=" ")
+            console.print("\n[bold green]You:[/bold green]")
         else:
-            print("\nYou: ", end="", flush=True)
+            print("\nYou (Enter twice to submit):")
 
+        lines = []
         try:
-            prompt = input().strip()
+            while True:
+                line = input()
+                if line == "" and lines and lines[-1] == "":
+                    # Two consecutive blank lines = submit
+                    break
+                lines.append(line)
         except EOFError:
             break
 
+        prompt = "\n".join(lines).strip()
         if not prompt:
             continue
         if prompt in ("/quit", "/exit", "exit", "quit"):
