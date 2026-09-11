@@ -1,12 +1,12 @@
 schemaVersion: 2.2.0
 metadata:
-  name: claude-sandbox-demo
-  displayName: Claude Agent Sandbox Demo
-  description: Pre-configured workspace with the Claude agent CLI client
+  name: claude-lab
+  displayName: Claude AI Lab
+  description: AI coding agent with GitLab integration — clone, edit, commit, MR
   tags:
     - python
     - ai
-    - demo
+    - gitlab
 
 components:
   - name: dev
@@ -25,7 +25,18 @@ commands:
       component: dev
       commandLine: python ${PROJECT_SOURCE}/claude-client.py register ${DEVWORKSPACE_CREATOR}
       workingDir: ${PROJECT_SOURCE}
-      label: "Register with Claude gateway"
+      label: "1. Register with Claude gateway"
+      group:
+        kind: run
+
+  - id: clone-my-app
+    exec:
+      component: dev
+      commandLine: |
+        python ${PROJECT_SOURCE}/claude-client.py run \
+          "Clone my GitLab repo workshop-python-microservices and list the files"
+      workingDir: ${PROJECT_SOURCE}
+      label: "2. Clone my app into the sandbox"
       group:
         kind: run
 
@@ -33,9 +44,23 @@ commands:
     exec:
       component: dev
       commandLine: |
-        echo "Enter your prompt:" && read PROMPT && python ${PROJECT_SOURCE}/claude-client.py run "$PROMPT"
+        printf "Prompt: " && read PROMPT && \
+        python ${PROJECT_SOURCE}/claude-client.py run "$PROMPT"
       workingDir: ${PROJECT_SOURCE}
-      label: "Run a Claude prompt"
+      label: "3. Run a Claude prompt"
+      group:
+        kind: run
+
+  - id: open-mr
+    exec:
+      component: dev
+      commandLine: |
+        printf "MR title: " && read TITLE && \
+        printf "Description: " && read DESC && \
+        python ${PROJECT_SOURCE}/claude-client.py run \
+          "Push my changes and open a draft MR titled '${TITLE}' with description: ${DESC}"
+      workingDir: ${PROJECT_SOURCE}
+      label: "4. Push changes and open MR"
       group:
         kind: run
 

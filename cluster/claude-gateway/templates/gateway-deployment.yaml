@@ -54,6 +54,16 @@ spec:
                 secretKeyRef:
                   name: gateway-signing-key
                   key: key
+            - name: GITLAB_URL
+              value: {{ .Values.gitlab.url | quote }}
+            - name: GITLAB_AUTH_USER
+              value: {{ .Values.gitlab.authUser | quote }}
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitlab.tokenSecret }}
+                  key: token
+                  optional: true
           resources:
             requests:
               cpu: {{ .Values.gateway.resources.requests.cpu | quote }}

@@ -5,6 +5,9 @@ import os
 import secrets
 import subprocess
 import time
+import urllib.request
+import urllib.parse
+import urllib.error
 from collections import defaultdict
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -19,6 +22,9 @@ MAX_OUTPUT_BYTES = 64 * 1024
 TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "14400"))  # 4 hours
 SIGNING_KEY = os.environ.get("TOKEN_SIGNING_KEY", secrets.token_hex(32))
 MAX_REQUESTS_PER_HOUR = int(os.environ.get("MAX_REQUESTS_PER_HOUR", "30"))
+GITLAB_URL = os.environ.get("GITLAB_URL", "").rstrip("/")
+GITLAB_TOKEN = os.environ.get("GITLAB_TOKEN", "")
+GITLAB_AUTH_USER = os.environ.get("GITLAB_AUTH_USER", "root")
 
 SANDBOX_WORKDIR.mkdir(parents=True, exist_ok=True)
 
@@ -71,13 +77,80 @@ def check_rate_limit(username: str) -> bool:
         return True
 
 
-# --- Sandboxed tools (per-user workdir) ---
+# --- Sandbox helpers ---
 
 def _user_workdir(username: str) -> Path:
     d = SANDBOX_WORKDIR / username
     d.mkdir(parents=True, exist_ok=True)
     return d
 
+
+def _git_env(workdir: Path, username: str) -> dict:
+    return {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": str(workdir),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+        "GIT_AUTHOR_NAME": username,
+        "GIT_AUTHOR_EMAIL": f"{username}@lab.local",
+        "GIT_COMMITTER_NAME": username,
+        "GIT_COMMITTER_EMAIL": f"{username}@lab.local",
+        "LANG": "C.UTF-8",
+    }
+
+
+def _run_git(args: list, cwd: Path, workdir: Path, username: str) -> tuple:
+    try:
+        result = subprocess.run(
+            ["git"] + args,
+            capture_output=True, text=True, timeout=60,
+            cwd=str(cwd), env=_git_env(workdir, username),
+        )
+        return result.returncode, result.stdout, result.stderr
+    except subprocess.TimeoutExpired:
+        return 1, "", "git operation timed out"
+
+
+def _active_repo_path(workdir: Path) -> Path | None:
+    meta = workdir / ".active_repo"
+    if not meta.exists():
+        return None
+    repo_name = meta.read_text().strip()
+    repo_path = workdir / repo_name
+    return repo_path if repo_path.is_dir() else None
+
+
+def _active_branch(workdir: Path) -> str | None:
+    meta = workdir / ".active_branch"
+    return meta.read_text().strip() if meta.exists() else None
+
+
+def _auth_url(repo_path: str) -> str:
+    return f"{GITLAB_URL}/{repo_path}.git".replace(
+        "https://", f"https://{GITLAB_AUTH_USER}:{GITLAB_TOKEN}@"
+    )
+
+
+def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
+    url = f"{GITLAB_URL}/api/v4{path}"
+    data = json.dumps(body).encode() if body else None
+    req = urllib.request.Request(
+        url, data=data, method=method,
+        headers={
+            "PRIVATE-TOKEN": GITLAB_TOKEN,
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            return json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return {"error": f"HTTP {e.code}: {e.read().decode()[:500]}"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+# --- Tool factory (per-request, closures over username/workdir) ---
 
 def make_tools(username: str):
     workdir = _user_workdir(username)
@@ -97,11 +170,13 @@ def make_tools(username: str):
         }
         if language not in runners:
             return f"Error: unsupported language '{language}'. Use python, bash, or javascript."
+        active = _active_repo_path(workdir)
+        cwd = active if active else workdir
         cmd = runners[language] + [code]
         try:
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=EXEC_TIMEOUT,
-                cwd=str(workdir),
+                cwd=str(cwd),
                 env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(workdir),
                      "TMPDIR": str(workdir), "LANG": "C.UTF-8"},
             )
@@ -164,22 +239,160 @@ def make_tools(username: str):
             lines.append(prefix + str(e.relative_to(workdir)))
         return "\n".join(lines) if lines else "(empty)"
 
-    return [execute_code, read_file, write_file, list_files]
+    @beta_tool
+    def git_clone(repo_name: str) -> str:
+        """Clone a GitLab repository into the sandbox and create a session branch.
+
+        Must be called before any other git_ tools. Creates a unique session branch
+        (ai/<username>/<timestamp>) so your work is isolated from main.
+
+        Args:
+            repo_name: Repository name in the user's GitLab namespace,
+                       e.g. "workshop-python-microservices".
+        """
+        if not GITLAB_URL or not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
+
+        repo_path = workdir / repo_name
+        if repo_path.exists():
+            branch = _active_branch(workdir) or "unknown"
+            return f"Already cloned at {repo_name}/  (session branch: {branch})"
+
+        try:
+            result = subprocess.run(
+                ["git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path)],
+                capture_output=True, text=True, timeout=120,
+                cwd=str(workdir), env=_git_env(workdir, username),
+            )
+        except subprocess.TimeoutExpired:
+            return "Error: git clone timed out after 120s"
+
+        if result.returncode != 0:
+            return f"Error: git clone failed\n{result.stderr.replace(GITLAB_TOKEN, '***')}"
+
+        branch = f"ai/{username}/{int(time.time())}"
+        rc, _, err = _run_git(["checkout", "-b", branch], repo_path, workdir, username)
+        if rc != 0:
+            return f"Cloned but failed to create session branch: {err}"
+
+        (workdir / ".active_repo").write_text(repo_name)
+        (workdir / ".active_branch").write_text(branch)
+
+        return f"Cloned {repo_name}/\nSession branch: {branch}\nReady — use read_file/write_file to explore and edit."
+
+    @beta_tool
+    def git_status() -> str:
+        """Show uncommitted changes in the active repository."""
+        repo = _active_repo_path(workdir)
+        if not repo:
+            return "Error: no repo cloned. Use git_clone first."
+        rc, out, err = _run_git(["status", "--short"], repo, workdir, username)
+        if rc != 0:
+            return f"Error: {err}"
+        return out.strip() or "(working tree clean)"
+
+    @beta_tool
+    def git_commit(message: str) -> str:
+        """Stage all changes and create a commit on the session branch.
+
+        Args:
+            message: Commit message describing what changed and why.
+        """
+        repo = _active_repo_path(workdir)
+        if not repo:
+            return "Error: no repo cloned. Use git_clone first."
+        rc, _, err = _run_git(["add", "-A"], repo, workdir, username)
+        if rc != 0:
+            return f"Error: git add failed\n{err}"
+        rc, out, err = _run_git(["commit", "-m", message], repo, workdir, username)
+        if rc != 0:
+            return f"Error: git commit failed\n{err}"
+        return out.strip() or "Committed."
+
+    @beta_tool
+    def git_push() -> str:
+        """Push the session branch to GitLab."""
+        if not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
+        repo = _active_repo_path(workdir)
+        branch = _active_branch(workdir)
+        if not repo or not branch:
+            return "Error: no repo cloned. Use git_clone first."
+
+        _run_git(
+            ["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
+            repo, workdir, username,
+        )
+        rc, _, err = _run_git(["push", "-u", "origin", branch], repo, workdir, username)
+        if rc != 0:
+            return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
+        return f"Pushed to origin/{branch}"
+
+    @beta_tool
+    def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
+        """Create a GitLab Merge Request from the session branch.
+
+        Only call this when the user explicitly asks to open an MR or pull request.
+        The MR is created as a draft. Returns the MR URL.
+
+        Args:
+            title: MR title.
+            description: MR description explaining what changed and why.
+            target_branch: Branch to merge into (default: "main").
+        """
+        if not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
+        branch = _active_branch(workdir)
+        repo = _active_repo_path(workdir)
+        if not branch or not repo:
+            return "Error: no active session. Clone and push changes first."
+
+        project_path = urllib.parse.quote(f"{username}/{repo.name}", safe="")
+        result = _gitlab_api(
+            "POST",
+            f"/projects/{project_path}/merge_requests",
+            {
+                "source_branch": branch,
+                "target_branch": target_branch,
+                "title": title,
+                "description": description,
+                "remove_source_branch": False,
+                "draft": True,
+            },
+        )
+
+        if "error" in result:
+            return f"Error creating MR: {result['error']}"
+
+        mr_url = result.get("web_url", "")
+        mr_iid = result.get("iid", "?")
+        return f"Draft MR !{mr_iid} opened: {mr_url}"
+
+    return [execute_code, read_file, write_file, list_files,
+            git_clone, git_status, git_commit, git_push, git_create_mr]
 
 
 SYSTEM_PROMPT = """\
-You are a code execution agent running inside an isolated Kata Containers \
-sandbox on OpenShift. You can execute Python, Bash, and JavaScript code, \
-and read/write files within the sandbox working directory.
+You are a code agent running inside an isolated Kata Containers sandbox on OpenShift. \
+You have tools to execute code, read/write files, and interact with GitLab repositories.
+
+Workflow:
+1. Use git_clone to clone the user's GitLab repo into your sandbox.
+2. Explore the repo with list_files and read_file. Edit with write_file.
+3. Run code with execute_code to test changes (runs from the repo root when a repo is active).
+4. Use git_commit to save progress — commit often with clear messages.
+5. Use git_push to push the session branch to GitLab when the user wants to share work.
+6. Only use git_create_mr when the user explicitly asks to open a Merge Request.
 
 Constraints:
-- No network access except to the Anthropic API.
-- All file operations are confined to your sandbox working directory.
-- Code execution has a timeout; long-running processes will be killed.
-- The environment is ephemeral — files do not persist between sessions.
+- Each session gets its own branch (ai/<username>/<timestamp>). Never push to main/master.
+- No network access except to the Anthropic API and the configured GitLab instance.
+- All file paths are relative to the sandbox working directory.
+- Code execution has a 30-second timeout.
+- The sandbox is ephemeral — data does not persist between sessions.
 
-When the user asks you to run code, use the execute_code tool. Prefer \
-writing files and then executing them for complex tasks."""
+Write clear commit messages. Prefer writing files and executing them over inline code \
+for anything longer than a few lines."""
 
 
 # --- HTTP handler ---
@@ -228,7 +441,6 @@ class AgentHandler(BaseHTTPRequestHandler):
             self._send_json(500, {"error": str(e)})
 
     def _handle_token(self):
-        """Issue a per-user token. Caller must present the OpenShift user header."""
         username = self.headers.get("X-Forwarded-User")
         if not username:
             body = json.loads(self._read_body() or b"{}")
@@ -241,7 +453,6 @@ class AgentHandler(BaseHTTPRequestHandler):
         self._send_json(200, token_data)
 
     def _handle_run(self):
-        """Execute an agent prompt. Requires a valid Bearer token."""
         username = self._authenticate()
         if not username:
             self._send_json(401, {"error": "invalid or expired token"})
@@ -291,8 +502,11 @@ def main():
     port = int(os.environ.get("PORT", "8080"))
     server = HTTPServer(("0.0.0.0", port), AgentHandler)
     print(f"Gateway listening on :{port}")
+    print(f"  GitLab: {GITLAB_URL or '(not configured)'}")
+    print(f"  GitLab auth user: {GITLAB_AUTH_USER}")
+    print(f"  GitLab token configured: {'yes' if GITLAB_TOKEN else 'no'}")
     print(f"  Token TTL: {TOKEN_TTL_SECONDS}s")
-    print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user")
+    print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user", flush=True)
     server.serve_forever()
 
 
