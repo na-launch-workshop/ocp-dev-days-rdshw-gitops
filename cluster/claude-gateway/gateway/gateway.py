@@ -9,7 +9,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from collections import defaultdict
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from threading import Lock
 
@@ -528,7 +528,7 @@ class AgentHandler(BaseHTTPRequestHandler):
 
 def main():
     port = int(os.environ.get("PORT", "8080"))
-    server = HTTPServer(("0.0.0.0", port), AgentHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), AgentHandler)
     print(f"Gateway listening on :{port}")
     print(f"  GitLab: {GITLAB_URL or '(not configured)'}")
     print(f"  GitLab auth user: {GITLAB_AUTH_USER}")
