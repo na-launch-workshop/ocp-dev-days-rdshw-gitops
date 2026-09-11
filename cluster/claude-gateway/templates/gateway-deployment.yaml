@@ -54,6 +54,10 @@ spec:
                 secretKeyRef:
                   name: gateway-signing-key
                   key: key
+            - name: GITLAB_URL
+              value: {{ .Values.gitlab.url | quote }}
+            - name: GITLAB_TOKENS_FILE
+              value: /etc/gitlab-tokens/tokens.json
           resources:
             requests:
               cpu: {{ .Values.gateway.resources.requests.cpu | quote }}
@@ -78,6 +82,9 @@ spec:
               mountPath: /tmp/sandbox
             - name: tmp
               mountPath: /tmp
+            - name: gitlab-tokens
+              mountPath: /etc/gitlab-tokens
+              readOnly: true
       volumes:
         - name: sandbox-workdir
           emptyDir:
@@ -85,3 +92,7 @@ spec:
         - name: tmp
           emptyDir:
             sizeLimit: 512Mi
+        - name: gitlab-tokens
+          secret:
+            secretName: {{ .Values.gitlab.tokensSecret }}
+            optional: true
