@@ -23,7 +23,8 @@ TOKEN_TTL_SECONDS = int(os.environ.get("TOKEN_TTL_SECONDS", "14400"))  # 4 hours
 SIGNING_KEY = os.environ.get("TOKEN_SIGNING_KEY", secrets.token_hex(32))
 MAX_REQUESTS_PER_HOUR = int(os.environ.get("MAX_REQUESTS_PER_HOUR", "30"))
 GITLAB_URL = os.environ.get("GITLAB_URL", "").rstrip("/")
-GITLAB_TOKENS_FILE = os.environ.get("GITLAB_TOKENS_FILE", "/etc/gitlab-tokens/tokens.json")
+GITLAB_TOKEN = os.environ.get("GITLAB_TOKEN", "")
+GITLAB_AUTH_USER = os.environ.get("GITLAB_AUTH_USER", "root")
 
 SANDBOX_WORKDIR.mkdir(parents=True, exist_ok=True)
 
@@ -31,16 +32,6 @@ client = Anthropic()
 
 rate_lock = Lock()
 rate_counters: dict[str, list[float]] = defaultdict(list)
-
-
-def _load_gitlab_tokens() -> dict:
-    try:
-        return json.loads(Path(GITLAB_TOKENS_FILE).read_text())
-    except Exception:
-        return {}
-
-
-gitlab_tokens: dict[str, str] = _load_gitlab_tokens()
 
 
 # --- Token management ---
@@ -134,13 +125,19 @@ def _active_branch(workdir: Path) -> str | None:
     return meta.read_text().strip() if meta.exists() else None
 
 
-def _gitlab_api(method: str, path: str, token: str, body: dict | None = None) -> dict:
+def _auth_url(repo_path: str) -> str:
+    return f"{GITLAB_URL}/{repo_path}.git".replace(
+        "https://", f"https://{GITLAB_AUTH_USER}:{GITLAB_TOKEN}@"
+    )
+
+
+def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
     url = f"{GITLAB_URL}/api/v4{path}"
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(
         url, data=data, method=method,
         headers={
-            "Authorization": f"Bearer {token}",
+            "PRIVATE-TOKEN": GITLAB_TOKEN,
             "Content-Type": "application/json",
         },
     )
@@ -157,7 +154,6 @@ def _gitlab_api(method: str, path: str, token: str, body: dict | None = None) ->
 
 def make_tools(username: str):
     workdir = _user_workdir(username)
-    gl_token = gitlab_tokens.get(username)
 
     @beta_tool
     def execute_code(language: str, code: str) -> str:
@@ -245,32 +241,26 @@ def make_tools(username: str):
 
     @beta_tool
     def git_clone(repo_name: str) -> str:
-        """Clone your GitLab repository into the sandbox and create a session branch.
+        """Clone a GitLab repository into the sandbox and create a session branch.
 
         Must be called before any other git_ tools. Creates a unique session branch
         (ai/<username>/<timestamp>) so your work is isolated from main.
 
         Args:
-            repo_name: Repository name in your GitLab userspace,
+            repo_name: Repository name in the user's GitLab namespace,
                        e.g. "workshop-python-microservices".
         """
-        if not GITLAB_URL:
-            return "Error: GITLAB_URL not configured on this gateway."
-        if not gl_token:
-            return f"Error: no GitLab deploy token found for user '{username}'. Ask the lab instructor."
+        if not GITLAB_URL or not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
 
         repo_path = workdir / repo_name
         if repo_path.exists():
             branch = _active_branch(workdir) or "unknown"
             return f"Already cloned at {repo_name}/  (session branch: {branch})"
 
-        auth_url = f"{GITLAB_URL}/{username}/{repo_name}.git".replace(
-            "https://", f"https://{username}:{gl_token}@"
-        )
-
         try:
             result = subprocess.run(
-                ["git", "clone", auth_url, str(repo_path)],
+                ["git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path)],
                 capture_output=True, text=True, timeout=120,
                 cwd=str(workdir), env=_git_env(workdir, username),
             )
@@ -278,7 +268,7 @@ def make_tools(username: str):
             return "Error: git clone timed out after 120s"
 
         if result.returncode != 0:
-            return f"Error: git clone failed\n{result.stderr.replace(gl_token, '***')}"
+            return f"Error: git clone failed\n{result.stderr.replace(GITLAB_TOKEN, '***')}"
 
         branch = f"ai/{username}/{int(time.time())}"
         rc, _, err = _run_git(["checkout", "-b", branch], repo_path, workdir, username)
@@ -322,22 +312,20 @@ def make_tools(username: str):
     @beta_tool
     def git_push() -> str:
         """Push the session branch to GitLab."""
-        if not gl_token:
-            return f"Error: no GitLab token for user '{username}'"
+        if not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
         repo = _active_repo_path(workdir)
         branch = _active_branch(workdir)
         if not repo or not branch:
             return "Error: no repo cloned. Use git_clone first."
 
-        repo_name = repo.name
-        auth_url = f"{GITLAB_URL}/{username}/{repo_name}.git".replace(
-            "https://", f"https://{username}:{gl_token}@"
+        _run_git(
+            ["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
+            repo, workdir, username,
         )
-        _run_git(["remote", "set-url", "origin", auth_url], repo, workdir, username)
-
-        rc, out, err = _run_git(["push", "-u", "origin", branch], repo, workdir, username)
+        rc, _, err = _run_git(["push", "-u", "origin", branch], repo, workdir, username)
         if rc != 0:
-            return f"Error: git push failed\n{err.replace(gl_token, '***')}"
+            return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
         return f"Pushed to origin/{branch}"
 
     @beta_tool
@@ -352,8 +340,8 @@ def make_tools(username: str):
             description: MR description explaining what changed and why.
             target_branch: Branch to merge into (default: "main").
         """
-        if not gl_token:
-            return f"Error: no GitLab token for user '{username}'"
+        if not GITLAB_TOKEN:
+            return "Error: GitLab not configured on this gateway."
         branch = _active_branch(workdir)
         repo = _active_repo_path(workdir)
         if not branch or not repo:
@@ -363,7 +351,6 @@ def make_tools(username: str):
         result = _gitlab_api(
             "POST",
             f"/projects/{project_path}/merge_requests",
-            gl_token,
             {
                 "source_branch": branch,
                 "target_branch": target_branch,
@@ -516,9 +503,10 @@ def main():
     server = HTTPServer(("0.0.0.0", port), AgentHandler)
     print(f"Gateway listening on :{port}")
     print(f"  GitLab: {GITLAB_URL or '(not configured)'}")
+    print(f"  GitLab auth user: {GITLAB_AUTH_USER}")
+    print(f"  GitLab token configured: {'yes' if GITLAB_TOKEN else 'no'}")
     print(f"  Token TTL: {TOKEN_TTL_SECONDS}s")
-    print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user")
-    print(f"  Users with GitLab tokens: {list(gitlab_tokens.keys())}", flush=True)
+    print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user", flush=True)
     server.serve_forever()
 
 

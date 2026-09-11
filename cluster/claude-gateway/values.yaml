@@ -2,7 +2,8 @@ namespace: claude-sandbox
 
 gitlab:
   url: "https://gitlab-gitlab.apps.cluster-x7f6f.dyn.redhatworkshops.io"
-  tokensSecret: "gitlab-user-tokens"
+  tokenSecret: "gitlab-token"
+  authUser: "root"
 
 gateway:
   replicas: 2
