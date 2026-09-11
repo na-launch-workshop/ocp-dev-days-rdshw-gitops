@@ -12,17 +12,9 @@ spec:
     dockerfile: |
       FROM parasol-insurance:latest
       USER 0
-      RUN tee /etc/yum.repos.d/claude-code.repo <<'REPO' && \
+      RUN printf '[claude-code]\nname=Claude Code\nbaseurl=https://downloads.claude.ai/claude-code/rpm/stable\nenabled=1\ngpgcheck=1\ngpgkey=https://downloads.claude.ai/keys/claude-code.asc\n' > /etc/yum.repos.d/claude-code.repo && \
           dnf install -y claude-code && \
           dnf clean all
-      [claude-code]
-      name=Claude Code
-      baseurl=https://downloads.claude.ai/claude-code/rpm/stable
-      enabled=1
-      gpgcheck=1
-      gpgkey=https://downloads.claude.ai/keys/claude-code.asc
-      REPO && \
-          cp -L /root/.local/bin/claude /usr/local/bin/claude
   strategy:
     type: Docker
     dockerStrategy:
