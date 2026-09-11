@@ -1,0 +1,20 @@
+namespace: claude-sandbox
+
+gitlab:
+  url: "https://gitlab-gitlab.apps.cluster-x7f6f.dyn.redhatworkshops.io"
+  tokenSecret: "gitlab-token"
+  authUser: "root"
+
+gateway:
+  replicas: 1
+  image: image-registry.openshift-image-registry.svc:5000/claude-sandbox/claude-gateway:latest
+  tokenTTLSeconds: "14400"
+  maxRequestsPerHour: "50000"
+  signingKey: "REPLACE_ME"
+  resources:
+    requests:
+      cpu: "200m"
+      memory: 1Gi
+    limits:
+      cpu: "4"
+      memory: 8Gi

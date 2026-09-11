@@ -1,0 +1,28 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: sandboxed-containers-operatorgroup
+  namespace: openshift-sandboxed-containers-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  targetNamespaces:
+    - openshift-sandboxed-containers-operator
+  upgradeStrategy: Default
+---
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: sandboxed-containers-operator
+  namespace: openshift-sandboxed-containers-operator
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+spec:
+  channel: {{ .Values.subscription.channel }}
+  installPlanApproval: {{ .Values.subscription.installPlanApproval }}
+  name: {{ .Values.subscription.name }}
+  source: {{ .Values.subscription.source }}
+  sourceNamespace: {{ .Values.subscription.sourceNamespace }}
+  {{- if .Values.subscription.startingCSV }}
+  startingCSV: {{ .Values.subscription.startingCSV }}
+  {{- end }}

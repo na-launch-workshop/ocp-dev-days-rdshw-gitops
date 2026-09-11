@@ -1,0 +1,97 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: claude-gateway
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  labels:
+    app.kubernetes.io/name: claude-gateway
+    app.kubernetes.io/part-of: claude-sandbox
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: claude-gateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: claude-gateway
+        app.kubernetes.io/part-of: claude-sandbox
+      annotations: {}
+    spec:
+      runtimeClassName: kata
+      serviceAccountName: claude-agent
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gateway
+          image: {{ .Values.gateway.image }}
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          envFrom:
+            - secretRef:
+                name: claude-auth
+                optional: true
+          env:
+            - name: SANDBOX_WORKDIR
+              value: /tmp/sandbox
+            - name: TOKEN_TTL_SECONDS
+              value: {{ .Values.gateway.tokenTTLSeconds | quote }}
+            - name: MAX_REQUESTS_PER_HOUR
+              value: {{ .Values.gateway.maxRequestsPerHour | quote }}
+            - name: TOKEN_SIGNING_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: gateway-signing-key
+                  key: key
+            - name: GITLAB_URL
+              value: {{ .Values.gitlab.url | quote }}
+            - name: GITLAB_AUTH_USER
+              value: {{ .Values.gitlab.authUser | quote }}
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.gitlab.tokenSecret }}
+                  key: token
+                  optional: true
+          resources:
+            requests:
+              cpu: {{ .Values.gateway.resources.requests.cpu | quote }}
+              memory: {{ .Values.gateway.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.gateway.resources.limits.cpu | quote }}
+              memory: {{ .Values.gateway.resources.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: sandbox-workdir
+              mountPath: /tmp/sandbox
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: sandbox-workdir
+          emptyDir:
+            sizeLimit: 5Gi
+        - name: tmp
+          emptyDir:
+            sizeLimit: 512Mi

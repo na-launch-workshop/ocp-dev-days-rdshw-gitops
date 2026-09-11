@@ -1,0 +1,69 @@
+schemaVersion: 2.2.0
+metadata:
+  name: claude-lab
+  displayName: Claude AI Lab
+  description: AI coding agent with GitLab integration — clone, edit, commit, MR
+  tags:
+    - python
+    - ai
+    - gitlab
+
+components:
+  - name: dev
+    container:
+      image: registry.access.redhat.com/ubi9/python-311:latest
+      memoryLimit: 2Gi
+      cpuLimit: "1"
+      mountSources: true
+      env:
+        - name: CLAUDE_GATEWAY_URL
+          value: http://claude-gateway.claude-sandbox.svc:8080
+
+commands:
+  - id: register
+    exec:
+      component: dev
+      commandLine: python ${PROJECT_SOURCE}/claude-client.py register ${DEVWORKSPACE_CREATOR}
+      workingDir: ${PROJECT_SOURCE}
+      label: "1. Register with Claude gateway"
+      group:
+        kind: run
+
+  - id: clone-my-app
+    exec:
+      component: dev
+      commandLine: |
+        python ${PROJECT_SOURCE}/claude-client.py run \
+          "Clone my GitLab repo workshop-python-microservices and list the files"
+      workingDir: ${PROJECT_SOURCE}
+      label: "2. Clone my app into the sandbox"
+      group:
+        kind: run
+
+  - id: run-prompt
+    exec:
+      component: dev
+      commandLine: |
+        printf "Prompt: " && read PROMPT && \
+        python ${PROJECT_SOURCE}/claude-client.py run "$PROMPT"
+      workingDir: ${PROJECT_SOURCE}
+      label: "3. Run a Claude prompt"
+      group:
+        kind: run
+
+  - id: open-mr
+    exec:
+      component: dev
+      commandLine: |
+        printf "MR title: " && read TITLE && \
+        printf "Description: " && read DESC && \
+        python ${PROJECT_SOURCE}/claude-client.py run \
+          "Push my changes and open a draft MR titled '${TITLE}' with description: ${DESC}"
+      workingDir: ${PROJECT_SOURCE}
+      label: "4. Push changes and open MR"
+      group:
+        kind: run
+
+events:
+  postStart:
+    - register

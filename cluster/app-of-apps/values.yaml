@@ -104,6 +104,16 @@ opentelemetry:
   name: opentelemetry
   namespace: opentelemetry
 
+sandboxedContainers:
+  enabled: true
+  name: sandboxed-containers
+  namespace: openshift-sandboxed-containers-operator
+
+claudeGateway:
+  enabled: true
+  name: claude-gateway
+  namespace: claude-sandbox
+
 tempo:
   name: tempo
   namespace: tempo
