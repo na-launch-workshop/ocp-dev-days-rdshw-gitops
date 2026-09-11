@@ -11,7 +11,7 @@ from pathlib import Path
 
 import aiohttp as aiohttp_client
 from aiohttp import web
-from anthropic import AsyncAnthropic, beta_async_tool
+from anthropic import AsyncAnthropic
 
 
 SANDBOX_WORKDIR = Path(os.environ.get("SANDBOX_WORKDIR", "/tmp/sandbox"))
@@ -145,7 +145,8 @@ async def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
     try:
         async with aiohttp_client.ClientSession() as session:
             async with session.request(
-                method, url, json=body, headers=headers, timeout=aiohttp_client.ClientTimeout(total=30)
+                method, url, json=body, headers=headers,
+                timeout=aiohttp_client.ClientTimeout(total=30)
             ) as resp:
                 text = await resp.text()
                 if resp.status >= 400:
@@ -160,14 +161,7 @@ async def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
 def make_tools(username: str):
     workdir = _user_workdir(username)
 
-    @beta_async_tool
     async def execute_code(language: str, code: str) -> str:
-        """Execute code in the sandboxed environment and return the output.
-
-        Args:
-            language: Programming language — "python", "bash", or "javascript".
-            code: The source code to execute.
-        """
         runners = {
             "python": ["python3", "-c"],
             "bash": ["bash", "-c"],
@@ -205,13 +199,7 @@ def make_tools(username: str):
         parts.append(f"exit code: {proc.returncode}")
         return "\n".join(parts)
 
-    @beta_async_tool
     async def read_file(path: str) -> str:
-        """Read a file from the sandbox working directory.
-
-        Args:
-            path: Relative path within the sandbox working directory.
-        """
         target = (workdir / path).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -220,14 +208,7 @@ def make_tools(username: str):
         content = target.read_text(errors="replace")
         return content[:MAX_OUTPUT_BYTES] + ("\n... (truncated)" if len(content) > MAX_OUTPUT_BYTES else "")
 
-    @beta_async_tool
     async def write_file(path: str, content: str) -> str:
-        """Write content to a file in the sandbox working directory.
-
-        Args:
-            path: Relative path within the sandbox working directory.
-            content: The file content to write.
-        """
         target = (workdir / path).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -235,13 +216,7 @@ def make_tools(username: str):
         target.write_text(content)
         return f"Wrote {len(content)} bytes to {path}"
 
-    @beta_async_tool
     async def list_files(directory: str = ".") -> str:
-        """List files in a directory within the sandbox.
-
-        Args:
-            directory: Relative path within the sandbox working directory.
-        """
         target = (workdir / directory).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -254,25 +229,13 @@ def make_tools(username: str):
             lines.append(prefix + str(e.relative_to(workdir)))
         return "\n".join(lines) if lines else "(empty)"
 
-    @beta_async_tool
     async def git_clone(repo_name: str) -> str:
-        """Clone a GitLab repository into the sandbox and create a session branch.
-
-        Must be called before any other git_ tools. Creates a unique session branch
-        (ai/<username>/<timestamp>) so your work is isolated from main.
-
-        Args:
-            repo_name: Repository name in the user's GitLab namespace,
-                       e.g. "workshop-python-microservices".
-        """
         if not GITLAB_URL or not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
-
         repo_path = workdir / repo_name
         if repo_path.exists():
             branch = _active_branch(workdir) or "unknown"
             return f"Already cloned at {repo_name}/  (session branch: {branch})"
-
         try:
             proc = await asyncio.create_subprocess_exec(
                 "git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path),
@@ -288,23 +251,17 @@ def make_tools(username: str):
                 return "Error: git clone timed out after 120s"
         except Exception as e:
             return f"Error: git clone failed\n{e}"
-
         if proc.returncode != 0:
             return f"Error: git clone failed\n{stderr.decode().replace(GITLAB_TOKEN, '***')}"
-
         branch = f"ai/{username}/{int(time.time())}"
         rc, _, err = await _run_git(["checkout", "-b", branch], repo_path, workdir, username)
         if rc != 0:
             return f"Cloned but failed to create session branch: {err}"
-
         (workdir / ".active_repo").write_text(repo_name)
         (workdir / ".active_branch").write_text(branch)
-
         return f"Cloned {repo_name}/\nSession branch: {branch}\nReady — use read_file/write_file to explore and edit."
 
-    @beta_async_tool
     async def git_status() -> str:
-        """Show uncommitted changes in the active repository."""
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
@@ -313,13 +270,7 @@ def make_tools(username: str):
             return f"Error: {err}"
         return out.strip() or "(working tree clean)"
 
-    @beta_async_tool
     async def git_commit(message: str) -> str:
-        """Stage all changes and create a commit on the session branch.
-
-        Args:
-            message: Commit message describing what changed and why.
-        """
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
@@ -331,16 +282,13 @@ def make_tools(username: str):
             return f"Error: git commit failed\n{err}"
         return out.strip() or "Committed."
 
-    @beta_async_tool
     async def git_push() -> str:
-        """Push the session branch to GitLab."""
         if not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
         repo = _active_repo_path(workdir)
         branch = _active_branch(workdir)
         if not repo or not branch:
             return "Error: no repo cloned. Use git_clone first."
-
         await _run_git(
             ["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
             repo, workdir, username,
@@ -350,48 +298,122 @@ def make_tools(username: str):
             return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
         return f"Pushed to origin/{branch}"
 
-    @beta_async_tool
     async def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
-        """Create a GitLab Merge Request from the session branch.
-
-        Only call this when the user explicitly asks to open an MR or pull request.
-        The MR is created as a draft. Returns the MR URL.
-
-        Args:
-            title: MR title.
-            description: MR description explaining what changed and why.
-            target_branch: Branch to merge into (default: "main").
-        """
         if not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
         branch = _active_branch(workdir)
         repo = _active_repo_path(workdir)
         if not branch or not repo:
             return "Error: no active session. Clone and push changes first."
-
         project_path = urllib.parse.quote(f"{username}/{repo.name}", safe="")
-        result = await _gitlab_api(
-            "POST",
-            f"/projects/{project_path}/merge_requests",
-            {
-                "source_branch": branch,
-                "target_branch": target_branch,
-                "title": title,
-                "description": description,
-                "remove_source_branch": False,
-                "draft": True,
-            },
-        )
-
+        result = await _gitlab_api("POST", f"/projects/{project_path}/merge_requests", {
+            "source_branch": branch, "target_branch": target_branch,
+            "title": title, "description": description,
+            "remove_source_branch": False, "draft": True,
+        })
         if "error" in result:
             return f"Error creating MR: {result['error']}"
+        return f"Draft MR !{result.get('iid','?')} opened: {result.get('web_url','')}"
 
-        mr_url = result.get("web_url", "")
-        mr_iid = result.get("iid", "?")
-        return f"Draft MR !{mr_iid} opened: {mr_url}"
+    schemas = [
+        {
+            "name": "execute_code",
+            "description": "Execute code in the sandboxed environment and return the output.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "language": {"type": "string", "description": "Programming language: python, bash, or javascript."},
+                    "code": {"type": "string", "description": "The source code to execute."},
+                },
+                "required": ["language", "code"],
+            },
+        },
+        {
+            "name": "read_file",
+            "description": "Read a file from the sandbox working directory.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"path": {"type": "string", "description": "Relative path within the sandbox."}},
+                "required": ["path"],
+            },
+        },
+        {
+            "name": "write_file",
+            "description": "Write content to a file in the sandbox working directory.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path within the sandbox."},
+                    "content": {"type": "string", "description": "The file content to write."},
+                },
+                "required": ["path", "content"],
+            },
+        },
+        {
+            "name": "list_files",
+            "description": "List files in a directory within the sandbox.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"directory": {"type": "string", "description": "Relative path within the sandbox (default: .)"}},
+                "required": [],
+            },
+        },
+        {
+            "name": "git_clone",
+            "description": "Clone a GitLab repository into the sandbox and create a session branch. Call before any other git_ tools.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"repo_name": {"type": "string", "description": "Repository name in the user's GitLab namespace."}},
+                "required": ["repo_name"],
+            },
+        },
+        {
+            "name": "git_status",
+            "description": "Show uncommitted changes in the active repository.",
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        },
+        {
+            "name": "git_commit",
+            "description": "Stage all changes and create a commit on the session branch.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"message": {"type": "string", "description": "Commit message."}},
+                "required": ["message"],
+            },
+        },
+        {
+            "name": "git_push",
+            "description": "Push the session branch to GitLab.",
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        },
+        {
+            "name": "git_create_mr",
+            "description": "Create a GitLab Merge Request. Only call when the user explicitly asks for an MR.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "MR title."},
+                    "description": {"type": "string", "description": "MR description."},
+                    "target_branch": {"type": "string", "description": "Branch to merge into (default: main)."},
+                },
+                "required": ["title", "description"],
+            },
+        },
+    ]
 
-    return [execute_code, read_file, write_file, list_files,
-            git_clone, git_status, git_commit, git_push, git_create_mr]
+    callables = {
+        "execute_code": execute_code,
+        "read_file": read_file,
+        "write_file": write_file,
+        "list_files": list_files,
+        "git_clone": git_clone,
+        "git_status": git_status,
+        "git_commit": git_commit,
+        "git_push": git_push,
+        "git_create_mr": git_create_mr,
+    }
+
+    return schemas, callables
 
 
 SYSTEM_PROMPT = """\
@@ -467,7 +489,7 @@ async def handle_run(request: web.Request) -> web.StreamResponse:
 
     print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
 
-    tools = make_tools(username)
+    schemas, callables = make_tools(username)
 
     history = list(conversation_histories.get(username, []))
     history.append({"role": "user", "content": prompt})
@@ -484,29 +506,54 @@ async def handle_run(request: web.Request) -> web.StreamResponse:
     response.enable_chunked_encoding()
     await response.prepare(request)
 
-    output_parts = []
-    try:
-        runner = client.beta.messages.tool_runner(
-            model="claude-opus-5",
-            max_tokens=16000,
-            system=SYSTEM_PROMPT,
-            thinking={"type": "adaptive"},
-            tools=tools,
-            messages=messages,
-        )
-        async for message in runner:
-            for block in message.content:
-                if block.type == "text" and block.text:
-                    try:
-                        await response.write(block.text.encode("utf-8"))
-                    except ConnectionResetError:
-                        return response
-                    output_parts.append(block.text)
-    except Exception as e:
+    async def write(text: str):
         try:
-            await response.write(f"\nError: {e}".encode("utf-8"))
-        except ConnectionResetError:
+            await response.write(text.encode("utf-8"))
+        except (ConnectionResetError, OSError):
             pass
+
+    output_parts = []
+    current_messages = list(messages)
+
+    try:
+        while True:
+            async with client.messages.stream(
+                model="claude-opus-5",
+                max_tokens=16000,
+                system=SYSTEM_PROMPT,
+                tools=schemas,
+                messages=current_messages,
+            ) as stream:
+                async for text in stream.text_stream:
+                    await write(text)
+                    output_parts.append(text)
+                final_message = await stream.get_final_message()
+
+            if final_message.stop_reason != "tool_use":
+                break
+
+            tool_results = []
+            for block in final_message.content:
+                if block.type == "tool_use":
+                    await write(f"\n[{block.name}...]\n")
+                    fn = callables.get(block.name)
+                    try:
+                        result = await fn(**block.input) if fn else f"Unknown tool: {block.name}"
+                    except Exception as e:
+                        result = f"Error: {e}"
+                    tool_results.append({
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": str(result),
+                    })
+
+            current_messages = current_messages + [
+                {"role": "assistant", "content": final_message.content},
+                {"role": "user", "content": tool_results},
+            ]
+
+    except Exception as e:
+        await write(f"\nError: {e}")
         print(f"[error] user={username} error={e}", flush=True)
 
     try:
@@ -514,7 +561,7 @@ async def handle_run(request: web.Request) -> web.StreamResponse:
     except (ConnectionResetError, OSError):
         pass
 
-    response_text = "\n".join(output_parts)
+    response_text = "".join(output_parts)
     h = conversation_histories.get(username, [])
     h.append({"role": "user", "content": prompt})
     h.append({"role": "assistant", "content": response_text})
