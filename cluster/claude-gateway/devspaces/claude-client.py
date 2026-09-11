@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI client for the Claude agent gateway. Runs inside Dev Spaces workspaces."""
+"""Interactive Claude agent client for Dev Spaces workspaces."""
 
 import json
 import os
@@ -12,6 +12,24 @@ GATEWAY_URL = os.environ.get(
     "CLAUDE_GATEWAY_URL", "http://claude-gateway.claude-sandbox.svc:8080"
 )
 TOKEN_FILE = os.path.expanduser("~/.claude-token")
+
+try:
+    from rich.console import Console
+    from rich.markdown import Markdown
+    from rich.panel import Panel
+    from rich.live import Live
+    RICH = True
+except ImportError:
+    RICH = False
+
+console = Console() if RICH else None
+
+
+def _print(text, **kwargs):
+    if RICH:
+        console.print(text, **kwargs)
+    else:
+        print(text)
 
 
 def _load_token() -> Optional[str]:
@@ -38,101 +56,164 @@ def register(username: str) -> str:
     with urllib.request.urlopen(req, timeout=10) as resp:
         result = json.loads(resp.read())
     _save_token(result["token"])
-    print(f"Registered as {result['username']}, token expires at {result['expires_at']}")
+    _print(f"[bold green]Registered as {result['username']}[/bold green]" if RICH
+           else f"Registered as {result['username']}")
     return result["token"]
 
 
 def run(prompt: str):
     token = _load_token()
     if not token:
-        print("No token found. Run: python claude-client.py register <your-name>", file=sys.stderr)
+        _print("[red]No token. Run: python client.py register <name>[/red]" if RICH
+               else "No token. Run: python client.py register <name>")
         sys.exit(1)
 
     data = json.dumps({"prompt": prompt}).encode()
     req = urllib.request.Request(
         f"{GATEWAY_URL}/run",
         data=data,
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        },
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
         method="POST",
     )
     try:
+        chunks = []
         with urllib.request.urlopen(req, timeout=300) as resp:
             while True:
-                chunk = resp.read(4096)
+                chunk = resp.read(256)
                 if not chunk:
                     break
-                print(chunk.decode("utf-8"), end="", flush=True)
-        print()
+                text = chunk.decode("utf-8")
+                chunks.append(text)
+                if not RICH:
+                    print(text, end="", flush=True)
+                else:
+                    # Print incrementally — rich panel rendered at end
+                    print(text, end="", flush=True)
+
+        if RICH:
+            full = "".join(chunks)
+            print()
+            console.print(Panel(
+                Markdown(full, code_theme="monokai"),
+                title="[bold purple]Claude[/bold purple]",
+                border_style="purple",
+            ))
+        else:
+            print()
+
     except urllib.error.HTTPError as e:
         try:
             body = json.loads(e.read())
-            print(f"Error ({e.code}): {body.get('error', 'unknown')}", file=sys.stderr)
+            _print(f"Error ({e.code}): {body.get('error', 'unknown')}")
         except Exception:
-            print(f"Error ({e.code})", file=sys.stderr)
+            _print(f"Error ({e.code})")
         if e.code == 401:
-            print("Token expired. Run: python claude-client.py register <your-name>", file=sys.stderr)
+            _print("Token expired — run: python client.py register <name>")
         sys.exit(1)
 
 
 def reset():
     token = _load_token()
     if not token:
-        print("No token found. Run: python claude-client.py register <your-name>", file=sys.stderr)
+        _print("No token. Run: python client.py register <name>")
         sys.exit(1)
-
     req = urllib.request.Request(
         f"{GATEWAY_URL}/reset",
         data=b"{}",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {token}",
-        },
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=10) as resp:
             result = json.loads(resp.read())
-        print(result.get("message", "Conversation history cleared."))
+        _print(result.get("message", "History cleared."))
     except urllib.error.HTTPError as e:
-        print(f"Error ({e.code})", file=sys.stderr)
+        _print(f"Error ({e.code})")
         sys.exit(1)
+
+
+def repl(username: str):
+    """Interactive REPL loop."""
+    register(username)
+
+    if RICH:
+        console.print(Panel(
+            "[bold]Commands:[/bold]\n"
+            "  Type your prompt and press Enter\n"
+            "  For multi-line input, end with [bold yellow]/send[/bold yellow] on its own line\n"
+            "  [bold yellow]/reset[/bold yellow]  — clear conversation history\n"
+            "  [bold yellow]/quit[/bold yellow]   — exit",
+            title="[bold cyan]Claude Agent[/bold cyan]",
+            border_style="cyan",
+        ))
+    else:
+        print("Claude Agent — type your prompt. /send for multi-line, /reset, /quit to exit.")
+
+    while True:
+        if RICH:
+            console.print("\n[bold green]You[/bold green] [dim](type /send for multi-line):[/dim]")
+        else:
+            print("\nYou: ", end="", flush=True)
+
+        lines = []
+        while True:
+            try:
+                line = input()
+            except EOFError:
+                break
+            if line.strip() == "/send":
+                break
+            if line.strip() in ("/quit", "/exit", "exit", "quit") and not lines:
+                if RICH:
+                    console.print("[bold yellow]Goodbye![/bold yellow]")
+                else:
+                    print("Goodbye!")
+                return
+            if line.strip() == "/reset" and not lines:
+                reset()
+                break
+            lines.append(line)
+
+        prompt = "\n".join(lines).strip()
+        if not prompt:
+            continue
+
+        if RICH:
+            console.print("[dim]Thinking...[/dim]")
+        run(prompt)
 
 
 def main():
     if len(sys.argv) < 2:
         print("Usage:")
-        print("  python claude-client.py register <your-name>   # Get a session token")
-        print("  python claude-client.py run <prompt>           # Run a prompt")
-        print("  python claude-client.py reset                  # Clear conversation history")
-        print()
-        print("Examples:")
-        print('  python claude-client.py register jdoe')
-        print('  python claude-client.py run "Clone my GitLab repo python-microservices"')
-        print('  python claude-client.py run "Add a /health endpoint and commit it"')
-        print('  python claude-client.py run "Push my changes and open a draft MR"')
-        print('  python claude-client.py reset')
+        print("  python client.py register <name>   # register and get token")
+        print("  python client.py chat <name>        # interactive REPL (recommended)")
+        print("  python client.py run <prompt>       # single prompt")
+        print("  python client.py reset              # clear history")
         sys.exit(0)
 
     cmd = sys.argv[1]
 
     if cmd == "register":
         if len(sys.argv) < 3:
-            print("Usage: python claude-client.py register <your-name>", file=sys.stderr)
+            print("Usage: python client.py register <name>")
             sys.exit(1)
         register(sys.argv[2])
+    elif cmd == "chat":
+        if len(sys.argv) < 3:
+            print("Usage: python client.py chat <name>")
+            sys.exit(1)
+        repl(sys.argv[2])
     elif cmd == "run":
         prompt = " ".join(sys.argv[2:])
         if not prompt:
-            print("Usage: python claude-client.py run <prompt>", file=sys.stderr)
+            print("Usage: python client.py run <prompt>")
             sys.exit(1)
         run(prompt)
     elif cmd == "reset":
         reset()
     else:
-        print(f"Unknown command: {cmd}", file=sys.stderr)
+        print(f"Unknown command: {cmd}")
         sys.exit(1)
 
 
