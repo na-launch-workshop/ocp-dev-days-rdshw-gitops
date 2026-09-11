@@ -1,1 +1,2 @@
 anthropic>=1.0.0
+aiohttp>=3.9.0

@@ -1,19 +1,17 @@
+import asyncio
 import hashlib
 import hmac
 import json
 import os
 import secrets
-import subprocess
 import time
-import urllib.request
 import urllib.parse
-import urllib.error
 from collections import defaultdict
-from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
-from threading import Lock
 
-from anthropic import Anthropic, beta_tool
+import aiohttp as aiohttp_client
+from aiohttp import web
+from anthropic import AsyncAnthropic, beta_tool
 
 
 SANDBOX_WORKDIR = Path(os.environ.get("SANDBOX_WORKDIR", "/tmp/sandbox"))
@@ -28,12 +26,9 @@ GITLAB_AUTH_USER = os.environ.get("GITLAB_AUTH_USER", "root")
 
 SANDBOX_WORKDIR.mkdir(parents=True, exist_ok=True)
 
-client = Anthropic()
+client = AsyncAnthropic()
 
-rate_lock = Lock()
 rate_counters: dict[str, list[float]] = defaultdict(list)
-
-history_lock = Lock()
 conversation_histories: dict[str, list] = {}
 MAX_HISTORY_TURNS = 10
 
@@ -71,14 +66,13 @@ def validate_token(token: str) -> str | None:
 def check_rate_limit(username: str) -> bool:
     now = time.time()
     cutoff = now - 3600
-    with rate_lock:
-        rate_counters[username] = [
-            t for t in rate_counters[username] if t > cutoff
-        ]
-        if len(rate_counters[username]) >= MAX_REQUESTS_PER_HOUR:
-            return False
-        rate_counters[username].append(now)
-        return True
+    rate_counters[username] = [
+        t for t in rate_counters[username] if t > cutoff
+    ]
+    if len(rate_counters[username]) >= MAX_REQUESTS_PER_HOUR:
+        return False
+    rate_counters[username].append(now)
+    return True
 
 
 # --- Sandbox helpers ---
@@ -103,16 +97,23 @@ def _git_env(workdir: Path, username: str) -> dict:
     }
 
 
-def _run_git(args: list, cwd: Path, workdir: Path, username: str) -> tuple:
+async def _run_git(args: list, cwd: Path, workdir: Path, username: str) -> tuple:
     try:
-        result = subprocess.run(
-            ["git"] + args,
-            capture_output=True, text=True, timeout=60,
+        proc = await asyncio.create_subprocess_exec(
+            "git", *args,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=str(cwd), env=_git_env(workdir, username),
         )
-        return result.returncode, result.stdout, result.stderr
-    except subprocess.TimeoutExpired:
-        return 1, "", "git operation timed out"
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=60)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            return 1, "", "git operation timed out"
+        return proc.returncode, stdout.decode(), stderr.decode()
+    except Exception as e:
+        return 1, "", str(e)
 
 
 def _active_repo_path(workdir: Path) -> Path | None:
@@ -135,21 +136,21 @@ def _auth_url(repo_path: str) -> str:
     )
 
 
-def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
+async def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
     url = f"{GITLAB_URL}/api/v4{path}"
-    data = json.dumps(body).encode() if body else None
-    req = urllib.request.Request(
-        url, data=data, method=method,
-        headers={
-            "PRIVATE-TOKEN": GITLAB_TOKEN,
-            "Content-Type": "application/json",
-        },
-    )
+    headers = {
+        "PRIVATE-TOKEN": GITLAB_TOKEN,
+        "Content-Type": "application/json",
+    }
     try:
-        with urllib.request.urlopen(req, timeout=30) as resp:
-            return json.loads(resp.read())
-    except urllib.error.HTTPError as e:
-        return {"error": f"HTTP {e.code}: {e.read().decode()[:500]}"}
+        async with aiohttp_client.ClientSession() as session:
+            async with session.request(
+                method, url, json=body, headers=headers, timeout=aiohttp_client.ClientTimeout(total=30)
+            ) as resp:
+                text = await resp.text()
+                if resp.status >= 400:
+                    return {"error": f"HTTP {resp.status}: {text[:500]}"}
+                return json.loads(text)
     except Exception as e:
         return {"error": str(e)}
 
@@ -160,7 +161,7 @@ def make_tools(username: str):
     workdir = _user_workdir(username)
 
     @beta_tool
-    def execute_code(language: str, code: str) -> str:
+    async def execute_code(language: str, code: str) -> str:
         """Execute code in the sandboxed environment and return the output.
 
         Args:
@@ -176,22 +177,32 @@ def make_tools(username: str):
             return f"Error: unsupported language '{language}'. Use python, bash, or javascript."
         active = _active_repo_path(workdir)
         cwd = active if active else workdir
-        cmd = runners[language] + [code]
+        cmd_args = runners[language] + [code]
         try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=EXEC_TIMEOUT,
+            proc = await asyncio.create_subprocess_exec(
+                *cmd_args,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd),
                 env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(workdir),
                      "TMPDIR": str(workdir), "LANG": "C.UTF-8"},
             )
-        except subprocess.TimeoutExpired:
-            return f"Error: execution timed out after {EXEC_TIMEOUT}s"
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=EXEC_TIMEOUT)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                return f"Error: execution timed out after {EXEC_TIMEOUT}s"
+        except Exception as e:
+            return f"Error: {e}"
         parts = []
-        if result.stdout:
-            parts.append(f"stdout:\n{result.stdout[:MAX_OUTPUT_BYTES]}")
-        if result.stderr:
-            parts.append(f"stderr:\n{result.stderr[:MAX_OUTPUT_BYTES]}")
-        parts.append(f"exit code: {result.returncode}")
+        stdout_text = stdout.decode(errors="replace")
+        stderr_text = stderr.decode(errors="replace")
+        if stdout_text:
+            parts.append(f"stdout:\n{stdout_text[:MAX_OUTPUT_BYTES]}")
+        if stderr_text:
+            parts.append(f"stderr:\n{stderr_text[:MAX_OUTPUT_BYTES]}")
+        parts.append(f"exit code: {proc.returncode}")
         return "\n".join(parts)
 
     @beta_tool
@@ -244,7 +255,7 @@ def make_tools(username: str):
         return "\n".join(lines) if lines else "(empty)"
 
     @beta_tool
-    def git_clone(repo_name: str) -> str:
+    async def git_clone(repo_name: str) -> str:
         """Clone a GitLab repository into the sandbox and create a session branch.
 
         Must be called before any other git_ tools. Creates a unique session branch
@@ -263,19 +274,26 @@ def make_tools(username: str):
             return f"Already cloned at {repo_name}/  (session branch: {branch})"
 
         try:
-            result = subprocess.run(
-                ["git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path)],
-                capture_output=True, text=True, timeout=120,
+            proc = await asyncio.create_subprocess_exec(
+                "git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
                 cwd=str(workdir), env=_git_env(workdir, username),
             )
-        except subprocess.TimeoutExpired:
-            return "Error: git clone timed out after 120s"
+            try:
+                _, stderr = await asyncio.wait_for(proc.communicate(), timeout=120)
+            except asyncio.TimeoutError:
+                proc.kill()
+                await proc.wait()
+                return "Error: git clone timed out after 120s"
+        except Exception as e:
+            return f"Error: git clone failed\n{e}"
 
-        if result.returncode != 0:
-            return f"Error: git clone failed\n{result.stderr.replace(GITLAB_TOKEN, '***')}"
+        if proc.returncode != 0:
+            return f"Error: git clone failed\n{stderr.decode().replace(GITLAB_TOKEN, '***')}"
 
         branch = f"ai/{username}/{int(time.time())}"
-        rc, _, err = _run_git(["checkout", "-b", branch], repo_path, workdir, username)
+        rc, _, err = await _run_git(["checkout", "-b", branch], repo_path, workdir, username)
         if rc != 0:
             return f"Cloned but failed to create session branch: {err}"
 
@@ -285,18 +303,18 @@ def make_tools(username: str):
         return f"Cloned {repo_name}/\nSession branch: {branch}\nReady — use read_file/write_file to explore and edit."
 
     @beta_tool
-    def git_status() -> str:
+    async def git_status() -> str:
         """Show uncommitted changes in the active repository."""
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
-        rc, out, err = _run_git(["status", "--short"], repo, workdir, username)
+        rc, out, err = await _run_git(["status", "--short"], repo, workdir, username)
         if rc != 0:
             return f"Error: {err}"
         return out.strip() or "(working tree clean)"
 
     @beta_tool
-    def git_commit(message: str) -> str:
+    async def git_commit(message: str) -> str:
         """Stage all changes and create a commit on the session branch.
 
         Args:
@@ -305,16 +323,16 @@ def make_tools(username: str):
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
-        rc, _, err = _run_git(["add", "-A"], repo, workdir, username)
+        rc, _, err = await _run_git(["add", "-A"], repo, workdir, username)
         if rc != 0:
             return f"Error: git add failed\n{err}"
-        rc, out, err = _run_git(["commit", "-m", message], repo, workdir, username)
+        rc, out, err = await _run_git(["commit", "-m", message], repo, workdir, username)
         if rc != 0:
             return f"Error: git commit failed\n{err}"
         return out.strip() or "Committed."
 
     @beta_tool
-    def git_push() -> str:
+    async def git_push() -> str:
         """Push the session branch to GitLab."""
         if not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
@@ -323,17 +341,17 @@ def make_tools(username: str):
         if not repo or not branch:
             return "Error: no repo cloned. Use git_clone first."
 
-        _run_git(
+        await _run_git(
             ["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
             repo, workdir, username,
         )
-        rc, _, err = _run_git(["push", "-u", "origin", branch], repo, workdir, username)
+        rc, _, err = await _run_git(["push", "-u", "origin", branch], repo, workdir, username)
         if rc != 0:
             return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
         return f"Pushed to origin/{branch}"
 
     @beta_tool
-    def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
+    async def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
         """Create a GitLab Merge Request from the session branch.
 
         Only call this when the user explicitly asks to open an MR or pull request.
@@ -352,7 +370,7 @@ def make_tools(username: str):
             return "Error: no active session. Clone and push changes first."
 
         project_path = urllib.parse.quote(f"{username}/{repo.name}", safe="")
-        result = _gitlab_api(
+        result = await _gitlab_api(
             "POST",
             f"/projects/{project_path}/merge_requests",
             {
@@ -399,164 +417,138 @@ Write clear commit messages. Prefer writing files and executing them over inline
 for anything longer than a few lines."""
 
 
-# --- HTTP handler ---
+# --- HTTP handlers ---
 
-class AgentHandler(BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
+def _authenticate(request: web.Request) -> str | None:
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        return None
+    return validate_token(auth[7:])
 
-    def _send_json(self, status: int, body: dict):
-        data = json.dumps(body).encode()
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
-        self.end_headers()
-        self.wfile.write(data)
 
-    def _read_body(self) -> bytes:
-        length = int(self.headers.get("Content-Length", 0))
-        return self.rfile.read(length)
+async def handle_healthz(request: web.Request) -> web.Response:
+    return web.json_response({"status": "ok"})
 
-    def _authenticate(self):
-        auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "):
-            return None
-        return validate_token(auth[7:])
 
-    def do_GET(self):
+async def handle_token(request: web.Request) -> web.Response:
+    username = request.headers.get("X-Forwarded-User")
+    if not username:
         try:
-            if self.path == "/healthz":
-                self._send_json(200, {"status": "ok"})
-            else:
-                self._send_json(404, {"error": "not found"})
-        except Exception as e:
-            print(f"[error] GET {self.path}: {e}", flush=True)
-            self._send_json(500, {"error": str(e)})
+            body = await request.json()
+        except Exception:
+            body = {}
+        username = body.get("username")
+    if not username:
+        return web.json_response(
+            {"error": "username required (X-Forwarded-User header or JSON body)"},
+            status=400,
+        )
+    token_data = create_token(username)
+    print(f"[token] issued for user={username} expires={token_data['expires_at']}", flush=True)
+    return web.json_response(token_data)
 
-    def do_POST(self):
+
+async def handle_run(request: web.Request) -> web.StreamResponse:
+    username = _authenticate(request)
+    if not username:
+        return web.json_response({"error": "invalid or expired token"}, status=401)
+    if not check_rate_limit(username):
+        return web.json_response(
+            {"error": f"rate limit exceeded ({MAX_REQUESTS_PER_HOUR}/hour)"},
+            status=429,
+        )
+    try:
+        body = await request.json()
+    except Exception:
+        return web.json_response({"error": "invalid JSON"}, status=400)
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        return web.json_response({"error": "prompt required"}, status=400)
+
+    print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
+
+    tools = make_tools(username)
+
+    history = list(conversation_histories.get(username, []))
+    history.append({"role": "user", "content": prompt})
+    messages = history[-(MAX_HISTORY_TURNS * 2):]
+
+    response = web.StreamResponse(
+        status=200,
+        headers={
+            "Content-Type": "text/plain; charset=utf-8",
+            "X-Accel-Buffering": "no",
+            "Cache-Control": "no-cache",
+        },
+    )
+    response.enable_chunked_encoding()
+    await response.prepare(request)
+
+    output_parts = []
+    try:
+        runner = client.beta.messages.tool_runner(
+            model="claude-opus-5",
+            max_tokens=16000,
+            system=SYSTEM_PROMPT,
+            thinking={"type": "adaptive"},
+            tools=tools,
+            messages=messages,
+        )
+        async for message in runner:
+            for block in message.content:
+                if block.type == "text" and block.text:
+                    try:
+                        await response.write(block.text.encode("utf-8"))
+                    except ConnectionResetError:
+                        return response
+                    output_parts.append(block.text)
+    except Exception as e:
         try:
-            if self.path == "/token":
-                self._handle_token()
-            elif self.path == "/run":
-                self._handle_run()
-            elif self.path == "/reset":
-                self._handle_reset()
-            else:
-                self._send_json(404, {"error": "not found"})
-        except Exception as e:
-            print(f"[error] POST {self.path}: {e}", flush=True)
-            self._send_json(500, {"error": str(e)})
+            await response.write(f"\nError: {e}".encode("utf-8"))
+        except ConnectionResetError:
+            pass
+        print(f"[error] user={username} error={e}", flush=True)
 
-    def _handle_token(self):
-        username = self.headers.get("X-Forwarded-User")
-        if not username:
-            body = json.loads(self._read_body() or b"{}")
-            username = body.get("username")
-        if not username:
-            self._send_json(400, {"error": "username required (X-Forwarded-User header or JSON body)"})
-            return
-        token_data = create_token(username)
-        print(f"[token] issued for user={username} expires={token_data['expires_at']}", flush=True)
-        self._send_json(200, token_data)
+    try:
+        await response.write_eof()
+    except (ConnectionResetError, OSError):
+        pass
 
-    def _handle_run(self):
-        username = self._authenticate()
-        if not username:
-            self._send_json(401, {"error": "invalid or expired token"})
-            return
-        if not check_rate_limit(username):
-            self._send_json(429, {"error": f"rate limit exceeded ({MAX_REQUESTS_PER_HOUR}/hour)"})
-            return
-        try:
-            body = json.loads(self._read_body())
-        except json.JSONDecodeError:
-            self._send_json(400, {"error": "invalid JSON"})
-            return
-        prompt = body.get("prompt", "").strip()
-        if not prompt:
-            self._send_json(400, {"error": "prompt required"})
-            return
+    response_text = "\n".join(output_parts)
+    h = conversation_histories.get(username, [])
+    h.append({"role": "user", "content": prompt})
+    h.append({"role": "assistant", "content": response_text})
+    conversation_histories[username] = h[-(MAX_HISTORY_TURNS * 2):]
 
-        print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
+    return response
 
-        tools = make_tools(username)
 
-        with history_lock:
-            history = list(conversation_histories.get(username, []))
-        history.append({"role": "user", "content": prompt})
-        messages = history[-(MAX_HISTORY_TURNS * 2):]
-
-        self.send_response(200)
-        self.send_header("Content-Type", "text/plain; charset=utf-8")
-        self.send_header("Transfer-Encoding", "chunked")
-        self.send_header("X-Accel-Buffering", "no")
-        self.end_headers()
-
-        def write_chunk(text):
-            data = text.encode("utf-8")
-            try:
-                self.wfile.write(f"{len(data):x}\r\n".encode())
-                self.wfile.write(data)
-                self.wfile.write(b"\r\n")
-                self.wfile.flush()
-            except (BrokenPipeError, OSError):
-                pass
-
-        output_parts = []
-        try:
-            runner = client.beta.messages.tool_runner(
-                model="claude-opus-5",
-                max_tokens=16000,
-                system=SYSTEM_PROMPT,
-                thinking={"type": "adaptive"},
-                tools=tools,
-                messages=messages,
-            )
-            for message in runner:
-                for block in message.content:
-                    if block.type == "text" and block.text:
-                        write_chunk(block.text)
-                        output_parts.append(block.text)
-        except Exception as e:
-            write_chunk(f"\nError: {e}")
-            print(f"[error] user={username} error={e}", flush=True)
-        finally:
-            try:
-                self.wfile.write(b"0\r\n\r\n")
-                self.wfile.flush()
-            except (BrokenPipeError, OSError):
-                pass
-
-        response_text = "\n".join(output_parts)
-        with history_lock:
-            h = conversation_histories.get(username, [])
-            h.append({"role": "user", "content": prompt})
-            h.append({"role": "assistant", "content": response_text})
-            conversation_histories[username] = h[-(MAX_HISTORY_TURNS * 2):]
-
-    def _handle_reset(self):
-        username = self._authenticate()
-        if not username:
-            self._send_json(401, {"error": "invalid or expired token"})
-            return
-        with history_lock:
-            conversation_histories.pop(username, None)
-        print(f"[reset] cleared history for user={username}", flush=True)
-        self._send_json(200, {"user": username, "message": "conversation history cleared"})
-
-    def log_message(self, format, *args):
-        print(f"[http] {self.client_address[0]} {format % args}", flush=True)
+async def handle_reset(request: web.Request) -> web.Response:
+    username = _authenticate(request)
+    if not username:
+        return web.json_response({"error": "invalid or expired token"}, status=401)
+    conversation_histories.pop(username, None)
+    print(f"[reset] cleared history for user={username}", flush=True)
+    return web.json_response({"user": username, "message": "conversation history cleared"})
 
 
 def main():
     port = int(os.environ.get("PORT", "8080"))
-    server = ThreadingHTTPServer(("0.0.0.0", port), AgentHandler)
+
+    app = web.Application()
+    app.router.add_get("/healthz", handle_healthz)
+    app.router.add_post("/token", handle_token)
+    app.router.add_post("/run", handle_run)
+    app.router.add_post("/reset", handle_reset)
+
     print(f"Gateway listening on :{port}")
     print(f"  GitLab: {GITLAB_URL or '(not configured)'}")
     print(f"  GitLab auth user: {GITLAB_AUTH_USER}")
     print(f"  GitLab token configured: {'yes' if GITLAB_TOKEN else 'no'}")
     print(f"  Token TTL: {TOKEN_TTL_SECONDS}s")
     print(f"  Rate limit: {MAX_REQUESTS_PER_HOUR} req/hour/user", flush=True)
-    server.serve_forever()
+
+    web.run_app(app, host="0.0.0.0", port=port, print=None)
 
 
 if __name__ == "__main__":
