@@ -33,6 +33,10 @@ client = Anthropic()
 rate_lock = Lock()
 rate_counters: dict[str, list[float]] = defaultdict(list)
 
+history_lock = Lock()
+conversation_histories: dict[str, list] = {}
+MAX_HISTORY_TURNS = 10
+
 
 # --- Token management ---
 
@@ -434,6 +438,8 @@ class AgentHandler(BaseHTTPRequestHandler):
                 self._handle_token()
             elif self.path == "/run":
                 self._handle_run()
+            elif self.path == "/reset":
+                self._handle_reset()
             else:
                 self._send_json(404, {"error": "not found"})
         except Exception as e:
@@ -473,7 +479,11 @@ class AgentHandler(BaseHTTPRequestHandler):
         print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
 
         tools = make_tools(username)
-        messages = [{"role": "user", "content": prompt}]
+
+        with history_lock:
+            history = list(conversation_histories.get(username, []))
+        history.append({"role": "user", "content": prompt})
+        messages = history[-(MAX_HISTORY_TURNS * 2):]
 
         try:
             runner = client.beta.messages.tool_runner(
@@ -489,10 +499,28 @@ class AgentHandler(BaseHTTPRequestHandler):
                 for block in message.content:
                     if block.type == "text":
                         output_parts.append(block.text)
-            self._send_json(200, {"user": username, "response": "\n".join(output_parts)})
+            response_text = "\n".join(output_parts)
+
+            with history_lock:
+                h = conversation_histories.get(username, [])
+                h.append({"role": "user", "content": prompt})
+                h.append({"role": "assistant", "content": response_text})
+                conversation_histories[username] = h[-(MAX_HISTORY_TURNS * 2):]
+
+            self._send_json(200, {"user": username, "response": response_text})
         except Exception as e:
             print(f"[error] user={username} error={e}", flush=True)
             self._send_json(500, {"error": str(e)})
+
+    def _handle_reset(self):
+        username = self._authenticate()
+        if not username:
+            self._send_json(401, {"error": "invalid or expired token"})
+            return
+        with history_lock:
+            conversation_histories.pop(username, None)
+        print(f"[reset] cleared history for user={username}", flush=True)
+        self._send_json(200, {"user": username, "message": "conversation history cleared"})
 
     def log_message(self, format, *args):
         print(f"[http] {self.client_address[0]} {format % args}", flush=True)

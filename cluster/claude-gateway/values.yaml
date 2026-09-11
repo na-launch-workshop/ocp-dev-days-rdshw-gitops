@@ -6,7 +6,7 @@ gitlab:
   authUser: "root"
 
 gateway:
-  replicas: 2
+  replicas: 1
   image: image-registry.openshift-image-registry.svc:5000/claude-sandbox/claude-gateway:latest
   tokenTTLSeconds: "14400"
   maxRequestsPerHour: "30"
