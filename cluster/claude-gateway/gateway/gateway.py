@@ -416,7 +416,7 @@ class AgentHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         return self.rfile.read(length)
 
-    def _authenticate(self) -> str | None:
+    def _authenticate(self):
         auth = self.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
             return None
@@ -485,6 +485,23 @@ class AgentHandler(BaseHTTPRequestHandler):
         history.append({"role": "user", "content": prompt})
         messages = history[-(MAX_HISTORY_TURNS * 2):]
 
+        self.send_response(200)
+        self.send_header("Content-Type", "text/plain; charset=utf-8")
+        self.send_header("Transfer-Encoding", "chunked")
+        self.send_header("X-Accel-Buffering", "no")
+        self.end_headers()
+
+        def write_chunk(text):
+            data = text.encode("utf-8")
+            try:
+                self.wfile.write(f"{len(data):x}\r\n".encode())
+                self.wfile.write(data)
+                self.wfile.write(b"\r\n")
+                self.wfile.flush()
+            except (BrokenPipeError, OSError):
+                pass
+
+        output_parts = []
         try:
             runner = client.beta.messages.tool_runner(
                 model="claude-opus-5",
@@ -494,23 +511,27 @@ class AgentHandler(BaseHTTPRequestHandler):
                 tools=tools,
                 messages=messages,
             )
-            output_parts = []
             for message in runner:
                 for block in message.content:
-                    if block.type == "text":
+                    if block.type == "text" and block.text:
+                        write_chunk(block.text)
                         output_parts.append(block.text)
-            response_text = "\n".join(output_parts)
-
-            with history_lock:
-                h = conversation_histories.get(username, [])
-                h.append({"role": "user", "content": prompt})
-                h.append({"role": "assistant", "content": response_text})
-                conversation_histories[username] = h[-(MAX_HISTORY_TURNS * 2):]
-
-            self._send_json(200, {"user": username, "response": response_text})
         except Exception as e:
+            write_chunk(f"\nError: {e}")
             print(f"[error] user={username} error={e}", flush=True)
-            self._send_json(500, {"error": str(e)})
+        finally:
+            try:
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+            except (BrokenPipeError, OSError):
+                pass
+
+        response_text = "\n".join(output_parts)
+        with history_lock:
+            h = conversation_histories.get(username, [])
+            h.append({"role": "user", "content": prompt})
+            h.append({"role": "assistant", "content": response_text})
+            conversation_histories[username] = h[-(MAX_HISTORY_TURNS * 2):]
 
     def _handle_reset(self):
         username = self._authenticate()
