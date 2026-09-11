@@ -206,7 +206,7 @@ def make_tools(username: str):
         return "\n".join(parts)
 
     @beta_async_tool
-    def read_file(path: str) -> str:
+    async def read_file(path: str) -> str:
         """Read a file from the sandbox working directory.
 
         Args:
@@ -221,7 +221,7 @@ def make_tools(username: str):
         return content[:MAX_OUTPUT_BYTES] + ("\n... (truncated)" if len(content) > MAX_OUTPUT_BYTES else "")
 
     @beta_async_tool
-    def write_file(path: str, content: str) -> str:
+    async def write_file(path: str, content: str) -> str:
         """Write content to a file in the sandbox working directory.
 
         Args:
@@ -236,7 +236,7 @@ def make_tools(username: str):
         return f"Wrote {len(content)} bytes to {path}"
 
     @beta_async_tool
-    def list_files(directory: str = ".") -> str:
+    async def list_files(directory: str = ".") -> str:
         """List files in a directory within the sandbox.
 
         Args:
