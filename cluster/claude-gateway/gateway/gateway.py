@@ -13,7 +13,7 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
 from threading import Lock
 
-from anthropic import Anthropic, beta_tool
+from anthropic import Anthropic
 
 
 SANDBOX_WORKDIR = Path(os.environ.get("SANDBOX_WORKDIR", "/tmp/sandbox"))
@@ -31,28 +31,24 @@ SANDBOX_WORKDIR.mkdir(parents=True, exist_ok=True)
 client = Anthropic()
 
 rate_lock = Lock()
-rate_counters: dict[str, list[float]] = defaultdict(list)
+rate_counters = defaultdict(list)
 
 history_lock = Lock()
-conversation_histories: dict[str, list] = {}
+conversation_histories = {}
 MAX_HISTORY_TURNS = 10
 
 
 # --- Token management ---
 
-def create_token(username: str) -> dict:
+def create_token(username):
     issued_at = int(time.time())
     expires_at = issued_at + TOKEN_TTL_SECONDS
     payload = json.dumps({"sub": username, "iat": issued_at, "exp": expires_at})
     sig = hmac.new(SIGNING_KEY.encode(), payload.encode(), hashlib.sha256).hexdigest()
-    return {
-        "token": f"{payload}|{sig}",
-        "username": username,
-        "expires_at": expires_at,
-    }
+    return {"token": f"{payload}|{sig}", "username": username, "expires_at": expires_at}
 
 
-def validate_token(token: str) -> str | None:
+def validate_token(token):
     try:
         payload_str, sig = token.rsplit("|", 1)
         expected = hmac.new(
@@ -68,13 +64,11 @@ def validate_token(token: str) -> str | None:
         return None
 
 
-def check_rate_limit(username: str) -> bool:
+def check_rate_limit(username):
     now = time.time()
     cutoff = now - 3600
     with rate_lock:
-        rate_counters[username] = [
-            t for t in rate_counters[username] if t > cutoff
-        ]
+        rate_counters[username] = [t for t in rate_counters[username] if t > cutoff]
         if len(rate_counters[username]) >= MAX_REQUESTS_PER_HOUR:
             return False
         rate_counters[username].append(now)
@@ -83,13 +77,13 @@ def check_rate_limit(username: str) -> bool:
 
 # --- Sandbox helpers ---
 
-def _user_workdir(username: str) -> Path:
+def _user_workdir(username):
     d = SANDBOX_WORKDIR / username
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def _git_env(workdir: Path, username: str) -> dict:
+def _git_env(workdir, username):
     return {
         "PATH": "/usr/local/bin:/usr/bin:/bin",
         "HOME": str(workdir),
@@ -103,7 +97,7 @@ def _git_env(workdir: Path, username: str) -> dict:
     }
 
 
-def _run_git(args: list, cwd: Path, workdir: Path, username: str) -> tuple:
+def _run_git(args, cwd, workdir, username):
     try:
         result = subprocess.run(
             ["git"] + args,
@@ -115,7 +109,7 @@ def _run_git(args: list, cwd: Path, workdir: Path, username: str) -> tuple:
         return 1, "", "git operation timed out"
 
 
-def _active_repo_path(workdir: Path) -> Path | None:
+def _active_repo_path(workdir):
     meta = workdir / ".active_repo"
     if not meta.exists():
         return None
@@ -124,26 +118,23 @@ def _active_repo_path(workdir: Path) -> Path | None:
     return repo_path if repo_path.is_dir() else None
 
 
-def _active_branch(workdir: Path) -> str | None:
+def _active_branch(workdir):
     meta = workdir / ".active_branch"
     return meta.read_text().strip() if meta.exists() else None
 
 
-def _auth_url(repo_path: str) -> str:
+def _auth_url(repo_path):
     return f"{GITLAB_URL}/{repo_path}.git".replace(
         "https://", f"https://{GITLAB_AUTH_USER}:{GITLAB_TOKEN}@"
     )
 
 
-def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
+def _gitlab_api(method, path, body=None):
     url = f"{GITLAB_URL}/api/v4{path}"
     data = json.dumps(body).encode() if body else None
     req = urllib.request.Request(
         url, data=data, method=method,
-        headers={
-            "PRIVATE-TOKEN": GITLAB_TOKEN,
-            "Content-Type": "application/json",
-        },
+        headers={"PRIVATE-TOKEN": GITLAB_TOKEN, "Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
@@ -154,33 +145,21 @@ def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
         return {"error": str(e)}
 
 
-# --- Tool factory (per-request, closures over username/workdir) ---
+# --- Tool factory ---
 
-def make_tools(username: str):
+def make_tools(username):
     workdir = _user_workdir(username)
 
-    @beta_tool
-    def execute_code(language: str, code: str) -> str:
-        """Execute code in the sandboxed environment and return the output.
-
-        Args:
-            language: Programming language — "python", "bash", or "javascript".
-            code: The source code to execute.
-        """
-        runners = {
-            "python": ["python3", "-c"],
-            "bash": ["bash", "-c"],
-            "javascript": ["node", "-e"],
-        }
+    def execute_code(language, code):
+        runners = {"python": ["python3", "-c"], "bash": ["bash", "-c"], "javascript": ["node", "-e"]}
         if language not in runners:
             return f"Error: unsupported language '{language}'. Use python, bash, or javascript."
         active = _active_repo_path(workdir)
         cwd = active if active else workdir
-        cmd = runners[language] + [code]
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=EXEC_TIMEOUT,
-                cwd=str(cwd),
+                runners[language] + [code], capture_output=True, text=True,
+                timeout=EXEC_TIMEOUT, cwd=str(cwd),
                 env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": str(workdir),
                      "TMPDIR": str(workdir), "LANG": "C.UTF-8"},
             )
@@ -194,13 +173,7 @@ def make_tools(username: str):
         parts.append(f"exit code: {result.returncode}")
         return "\n".join(parts)
 
-    @beta_tool
-    def read_file(path: str) -> str:
-        """Read a file from the sandbox working directory.
-
-        Args:
-            path: Relative path within the sandbox working directory.
-        """
+    def read_file(path):
         target = (workdir / path).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -209,14 +182,7 @@ def make_tools(username: str):
         content = target.read_text(errors="replace")
         return content[:MAX_OUTPUT_BYTES] + ("\n... (truncated)" if len(content) > MAX_OUTPUT_BYTES else "")
 
-    @beta_tool
-    def write_file(path: str, content: str) -> str:
-        """Write content to a file in the sandbox working directory.
-
-        Args:
-            path: Relative path within the sandbox working directory.
-            content: The file content to write.
-        """
+    def write_file(path, content):
         target = (workdir / path).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -224,13 +190,7 @@ def make_tools(username: str):
         target.write_text(content)
         return f"Wrote {len(content)} bytes to {path}"
 
-    @beta_tool
-    def list_files(directory: str = ".") -> str:
-        """List files in a directory within the sandbox.
-
-        Args:
-            directory: Relative path within the sandbox working directory.
-        """
+    def list_files(directory="."):
         target = (workdir / directory).resolve()
         if not str(target).startswith(str(workdir.resolve())):
             return "Error: path traversal denied"
@@ -239,29 +199,16 @@ def make_tools(username: str):
         entries = sorted(target.iterdir())
         lines = []
         for e in entries[:200]:
-            prefix = "d " if e.is_dir() else "f "
-            lines.append(prefix + str(e.relative_to(workdir)))
+            lines.append(("d " if e.is_dir() else "f ") + str(e.relative_to(workdir)))
         return "\n".join(lines) if lines else "(empty)"
 
-    @beta_tool
-    def git_clone(repo_name: str) -> str:
-        """Clone a GitLab repository into the sandbox and create a session branch.
-
-        Must be called before any other git_ tools. Creates a unique session branch
-        (ai/<username>/<timestamp>) so your work is isolated from main.
-
-        Args:
-            repo_name: Repository name in the user's GitLab namespace,
-                       e.g. "workshop-python-microservices".
-        """
+    def git_clone(repo_name):
         if not GITLAB_URL or not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
-
         repo_path = workdir / repo_name
         if repo_path.exists():
             branch = _active_branch(workdir) or "unknown"
             return f"Already cloned at {repo_name}/  (session branch: {branch})"
-
         try:
             result = subprocess.run(
                 ["git", "clone", _auth_url(f"{username}/{repo_name}"), str(repo_path)],
@@ -270,38 +217,24 @@ def make_tools(username: str):
             )
         except subprocess.TimeoutExpired:
             return "Error: git clone timed out after 120s"
-
         if result.returncode != 0:
             return f"Error: git clone failed\n{result.stderr.replace(GITLAB_TOKEN, '***')}"
-
         branch = f"ai/{username}/{int(time.time())}"
         rc, _, err = _run_git(["checkout", "-b", branch], repo_path, workdir, username)
         if rc != 0:
             return f"Cloned but failed to create session branch: {err}"
-
         (workdir / ".active_repo").write_text(repo_name)
         (workdir / ".active_branch").write_text(branch)
-
         return f"Cloned {repo_name}/\nSession branch: {branch}\nReady — use read_file/write_file to explore and edit."
 
-    @beta_tool
-    def git_status() -> str:
-        """Show uncommitted changes in the active repository."""
+    def git_status():
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
         rc, out, err = _run_git(["status", "--short"], repo, workdir, username)
-        if rc != 0:
-            return f"Error: {err}"
         return out.strip() or "(working tree clean)"
 
-    @beta_tool
-    def git_commit(message: str) -> str:
-        """Stage all changes and create a commit on the session branch.
-
-        Args:
-            message: Commit message describing what changed and why.
-        """
+    def git_commit(message):
         repo = _active_repo_path(workdir)
         if not repo:
             return "Error: no repo cloned. Use git_clone first."
@@ -313,67 +246,136 @@ def make_tools(username: str):
             return f"Error: git commit failed\n{err}"
         return out.strip() or "Committed."
 
-    @beta_tool
-    def git_push() -> str:
-        """Push the session branch to GitLab."""
+    def git_push():
         if not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
         repo = _active_repo_path(workdir)
         branch = _active_branch(workdir)
         if not repo or not branch:
             return "Error: no repo cloned. Use git_clone first."
-
-        _run_git(
-            ["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
-            repo, workdir, username,
-        )
+        _run_git(["remote", "set-url", "origin", _auth_url(f"{username}/{repo.name}")],
+                 repo, workdir, username)
         rc, _, err = _run_git(["push", "-u", "origin", branch], repo, workdir, username)
         if rc != 0:
             return f"Error: git push failed\n{err.replace(GITLAB_TOKEN, '***')}"
         return f"Pushed to origin/{branch}"
 
-    @beta_tool
-    def git_create_mr(title: str, description: str, target_branch: str = "main") -> str:
-        """Create a GitLab Merge Request from the session branch.
-
-        Only call this when the user explicitly asks to open an MR or pull request.
-        The MR is created as a draft. Returns the MR URL.
-
-        Args:
-            title: MR title.
-            description: MR description explaining what changed and why.
-            target_branch: Branch to merge into (default: "main").
-        """
+    def git_create_mr(title, description, target_branch="main"):
         if not GITLAB_TOKEN:
             return "Error: GitLab not configured on this gateway."
         branch = _active_branch(workdir)
         repo = _active_repo_path(workdir)
         if not branch or not repo:
             return "Error: no active session. Clone and push changes first."
-
         project_path = urllib.parse.quote(f"{username}/{repo.name}", safe="")
-        result = _gitlab_api(
-            "POST",
-            f"/projects/{project_path}/merge_requests",
-            {
-                "source_branch": branch,
-                "target_branch": target_branch,
-                "title": title,
-                "description": description,
-                "remove_source_branch": False,
-                "draft": True,
-            },
-        )
-
+        result = _gitlab_api("POST", f"/projects/{project_path}/merge_requests", {
+            "source_branch": branch, "target_branch": target_branch,
+            "title": title, "description": description,
+            "remove_source_branch": False, "draft": True,
+        })
         if "error" in result:
             return f"Error creating MR: {result['error']}"
+        return f"Draft MR !{result.get('iid','?')} opened: {result.get('web_url','')}"
 
-        mr_url = result.get("web_url", "")
-        mr_iid = result.get("iid", "?")
-        return f"Draft MR !{mr_iid} opened: {mr_url}"
+    schemas = [
+        {
+            "name": "execute_code",
+            "description": "Execute code in the sandboxed environment and return the output.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "language": {"type": "string", "description": "Programming language: python, bash, or javascript."},
+                    "code": {"type": "string", "description": "The source code to execute."},
+                },
+                "required": ["language", "code"],
+            },
+        },
+        {
+            "name": "read_file",
+            "description": "Read a file from the sandbox working directory.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"path": {"type": "string", "description": "Relative path within the sandbox."}},
+                "required": ["path"],
+            },
+        },
+        {
+            "name": "write_file",
+            "description": "Write content to a file in the sandbox working directory.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Relative path within the sandbox."},
+                    "content": {"type": "string", "description": "The file content to write."},
+                },
+                "required": ["path", "content"],
+            },
+        },
+        {
+            "name": "list_files",
+            "description": "List files in a directory within the sandbox.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"directory": {"type": "string", "description": "Relative path within the sandbox (default: .)"}},
+                "required": [],
+            },
+        },
+        {
+            "name": "git_clone",
+            "description": "Clone a GitLab repository into the sandbox and create a session branch. Call before any other git_ tools.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"repo_name": {"type": "string", "description": "Repository name in the user's GitLab namespace, e.g. python-microservices."}},
+                "required": ["repo_name"],
+            },
+        },
+        {
+            "name": "git_status",
+            "description": "Show uncommitted changes in the active repository.",
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        },
+        {
+            "name": "git_commit",
+            "description": "Stage all changes and create a commit on the session branch.",
+            "input_schema": {
+                "type": "object",
+                "properties": {"message": {"type": "string", "description": "Commit message."}},
+                "required": ["message"],
+            },
+        },
+        {
+            "name": "git_push",
+            "description": "Push the session branch to GitLab.",
+            "input_schema": {"type": "object", "properties": {}, "required": []},
+        },
+        {
+            "name": "git_create_mr",
+            "description": "Create a GitLab Merge Request. Only call when the user explicitly asks for an MR.",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "MR title."},
+                    "description": {"type": "string", "description": "MR description."},
+                    "target_branch": {"type": "string", "description": "Branch to merge into (default: main)."},
+                },
+                "required": ["title", "description"],
+            },
+        },
+    ]
 
-    return [execute_code, read_file, write_file, list_files,
-            git_clone, git_status, git_commit, git_push, git_create_mr]
+    callables = {
+        "execute_code": execute_code,
+        "read_file": read_file,
+        "write_file": write_file,
+        "list_files": list_files,
+        "git_clone": git_clone,
+        "git_status": git_status,
+        "git_commit": git_commit,
+        "git_push": git_push,
+        "git_create_mr": git_create_mr,
+    }
+
+    return schemas, callables
 
 
 SYSTEM_PROMPT = """\
@@ -404,7 +406,7 @@ for anything longer than a few lines."""
 class AgentHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
 
-    def _send_json(self, status: int, body: dict):
+    def _send_json(self, status, body):
         data = json.dumps(body).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -412,7 +414,7 @@ class AgentHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def _read_body(self) -> bytes:
+    def _read_body(self):
         length = int(self.headers.get("Content-Length", 0))
         return self.rfile.read(length)
 
@@ -430,7 +432,6 @@ class AgentHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "not found"})
         except Exception as e:
             print(f"[error] GET {self.path}: {e}", flush=True)
-            self._send_json(500, {"error": str(e)})
 
     def do_POST(self):
         try:
@@ -444,7 +445,6 @@ class AgentHandler(BaseHTTPRequestHandler):
                 self._send_json(404, {"error": "not found"})
         except Exception as e:
             print(f"[error] POST {self.path}: {e}", flush=True)
-            self._send_json(500, {"error": str(e)})
 
     def _handle_token(self):
         username = self.headers.get("X-Forwarded-User")
@@ -452,10 +452,10 @@ class AgentHandler(BaseHTTPRequestHandler):
             body = json.loads(self._read_body() or b"{}")
             username = body.get("username")
         if not username:
-            self._send_json(400, {"error": "username required (X-Forwarded-User header or JSON body)"})
+            self._send_json(400, {"error": "username required"})
             return
         token_data = create_token(username)
-        print(f"[token] issued for user={username} expires={token_data['expires_at']}", flush=True)
+        print(f"[token] issued for user={username}", flush=True)
         self._send_json(200, token_data)
 
     def _handle_run(self):
@@ -478,7 +478,7 @@ class AgentHandler(BaseHTTPRequestHandler):
 
         print(f"[run] user={username} prompt={prompt[:80]}...", flush=True)
 
-        tools = make_tools(username)
+        schemas, callables = make_tools(username)
 
         with history_lock:
             history = list(conversation_histories.get(username, []))
@@ -502,20 +502,45 @@ class AgentHandler(BaseHTTPRequestHandler):
                 pass
 
         output_parts = []
+        current_messages = list(messages)
+
         try:
-            runner = client.beta.messages.tool_runner(
-                model="claude-opus-5",
-                max_tokens=16000,
-                system=SYSTEM_PROMPT,
-                thinking={"type": "adaptive"},
-                tools=tools,
-                messages=messages,
-            )
-            for message in runner:
-                for block in message.content:
-                    if block.type == "text" and block.text:
-                        write_chunk(block.text)
-                        output_parts.append(block.text)
+            while True:
+                with client.messages.stream(
+                    model="claude-opus-5",
+                    max_tokens=16000,
+                    system=SYSTEM_PROMPT,
+                    tools=schemas,
+                    messages=current_messages,
+                ) as stream:
+                    for text in stream.text_stream:
+                        write_chunk(text)
+                        output_parts.append(text)
+                    final_message = stream.get_final_message()
+
+                if final_message.stop_reason != "tool_use":
+                    break
+
+                tool_results = []
+                for block in final_message.content:
+                    if block.type == "tool_use":
+                        write_chunk(f"\n[{block.name}...]\n")
+                        fn = callables.get(block.name)
+                        try:
+                            result = fn(**block.input) if fn else f"Unknown tool: {block.name}"
+                        except Exception as e:
+                            result = f"Error: {e}"
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": str(result),
+                        })
+
+                current_messages = current_messages + [
+                    {"role": "assistant", "content": final_message.content},
+                    {"role": "user", "content": tool_results},
+                ]
+
         except Exception as e:
             write_chunk(f"\nError: {e}")
             print(f"[error] user={username} error={e}", flush=True)
@@ -526,7 +551,7 @@ class AgentHandler(BaseHTTPRequestHandler):
             except (BrokenPipeError, OSError):
                 pass
 
-        response_text = "\n".join(output_parts)
+        response_text = "".join(output_parts)
         with history_lock:
             h = conversation_histories.get(username, [])
             h.append({"role": "user", "content": prompt})
