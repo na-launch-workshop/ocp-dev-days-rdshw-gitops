@@ -6,22 +6,15 @@ gitlab:
   authUser: "root"
 
 gateway:
-  replicas: 1
+  replicas: 4
   image: image-registry.openshift-image-registry.svc:5000/claude-sandbox/claude-gateway:latest
   tokenTTLSeconds: "14400"
   maxRequestsPerHour: "30"
   signingKey: "REPLACE_ME"
   resources:
     requests:
-      cpu: "100m"
-      memory: 128Mi
+      cpu: "200m"
+      memory: 1Gi
     limits:
-      cpu: "500m"
-      memory: 256Mi
-
-quota:
-  pods: "10"
-  requestsCPU: "8"
-  requestsMemory: 16Gi
-  limitsCPU: "16"
-  limitsMemory: 32Gi
+      cpu: "4"
+      memory: 8Gi
