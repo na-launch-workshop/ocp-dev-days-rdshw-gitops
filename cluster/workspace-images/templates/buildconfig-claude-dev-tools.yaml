@@ -12,7 +12,8 @@ spec:
     dockerfile: |
       FROM parasol-insurance:latest
       USER 0
-      RUN curl -fsSL https://claude.ai/install.sh | bash
+      RUN curl -fsSL https://claude.ai/install.sh | bash && \
+          ln -s /projects/.local/bin/claude /usr/local/bin/claude
   strategy:
     type: Docker
     dockerStrategy:
