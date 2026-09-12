@@ -22,7 +22,7 @@ try:
 except ImportError:
     RICH = False
 
-console = Console() if RICH else None
+console = Console(force_terminal=True, color_system="truecolor") if RICH else None
 
 
 def _print(text, **kwargs):
@@ -76,30 +76,17 @@ def run(prompt: str):
         method="POST",
     )
     try:
-        chunks = []
         with urllib.request.urlopen(req, timeout=300) as resp:
             while True:
                 chunk = resp.read(256)
                 if not chunk:
                     break
                 text = chunk.decode("utf-8")
-                chunks.append(text)
-                if not RICH:
-                    print(text, end="", flush=True)
+                if RICH:
+                    console.print(text, end="", highlight=False)
                 else:
-                    # Print incrementally — rich panel rendered at end
                     print(text, end="", flush=True)
-
-        if RICH:
-            full = "".join(chunks)
-            print()
-            console.print(Panel(
-                Markdown(full, code_theme="monokai"),
-                title="[bold purple]Claude[/bold purple]",
-                border_style="purple",
-            ))
-        else:
-            print()
+        print()
 
     except urllib.error.HTTPError as e:
         try:
@@ -135,6 +122,7 @@ def reset():
 def repl(username: str):
     """Interactive REPL loop."""
     register(username)
+    run("Clone my GitLab repo workshop-python-microservices and list the files")
 
     if RICH:
         console.print(Panel(
@@ -151,20 +139,24 @@ def repl(username: str):
 
     while True:
         if RICH:
-            console.print("\n[bold green]You:[/bold green]")
+            console.print("\n[bold green]You:[/bold green] ", end="")
         else:
-            print("\nYou (Enter twice to submit):")
+            print("\nYou: ", end="", flush=True)
 
         lines = []
         try:
             while True:
                 line = input()
-                if line == "" and lines and lines[-1] == "":
-                    # Two consecutive blank lines = submit
+                if line == "" and lines:
+                    # Blank line after content = submit
                     break
                 lines.append(line)
-        except EOFError:
-            break
+        except (EOFError, KeyboardInterrupt):
+            if RICH:
+                console.print("\n[bold yellow]Goodbye![/bold yellow]")
+            else:
+                print("\nGoodbye!")
+            return
 
         prompt = "\n".join(lines).strip()
         if not prompt:
@@ -201,10 +193,13 @@ def main():
             sys.exit(1)
         register(sys.argv[2])
     elif cmd == "chat":
-        if len(sys.argv) < 3:
+        username = sys.argv[2] if len(sys.argv) > 2 else None
+        if username:
+            username = username.replace("-devspaces", "")
+        if not username:
             print("Usage: python client.py chat <name>")
             sys.exit(1)
-        repl(sys.argv[2])
+        repl(username)
     elif cmd == "run":
         prompt = " ".join(sys.argv[2:])
         if not prompt:
