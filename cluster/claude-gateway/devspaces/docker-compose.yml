@@ -1,0 +1,100 @@
+version: "3.9"
+
+services:
+
+  users:
+    build:
+      context: .
+      dockerfile: users-service/Dockerfile
+    ports:
+      - "8001:8001"
+    volumes:
+      - users-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  products:
+    build:
+      context: .
+      dockerfile: products-service/Dockerfile
+    ports:
+      - "8002:8002"
+    volumes:
+      - products-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  inventory:
+    build:
+      context: .
+      dockerfile: inventory-service/Dockerfile
+    ports:
+      - "8003:8003"
+    volumes:
+      - inventory-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  orders:
+    build:
+      context: .
+      dockerfile: orders-service/Dockerfile
+    ports:
+      - "8004:8004"
+    volumes:
+      - orders-data:/data
+    environment:
+      USERS_SERVICE_URL: http://users:8001
+      PRODUCTS_SERVICE_URL: http://products:8002
+      INVENTORY_SERVICE_URL: http://inventory:8003
+    restart: unless-stopped
+    depends_on:
+      users:
+        condition: service_healthy
+      products:
+        condition: service_healthy
+      inventory:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      USERS_SERVICE_URL: http://users:8001
+      PRODUCTS_SERVICE_URL: http://products:8002
+      INVENTORY_SERVICE_URL: http://inventory:8003
+      ORDERS_SERVICE_URL: http://orders:8004
+    restart: unless-stopped
+    depends_on:
+      orders:
+        condition: service_healthy
+
+volumes:
+  users-data:
+  products-data:
+  inventory-data:
+  orders-data:
