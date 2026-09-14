@@ -3,7 +3,6 @@
   (printf "%s-build" $username)
   (printf "%s-dev" $username)
   (printf "%s-prod" $username)
-  (printf "%s-devspaces" $username)
 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -22,3 +21,19 @@ subjects:
     kind: User
     name: {{ $username }}
 {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: devspaces-pipeline-edit
+  namespace: {{ printf "%s-devspaces" $username }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: {{ printf "system:serviceaccounts:%s-devspaces" $username }}
