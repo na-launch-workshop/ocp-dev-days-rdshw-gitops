@@ -131,9 +131,11 @@ def _active_branch(workdir: Path) -> str | None:
 
 
 def _auth_url(repo_path: str) -> str:
-    return f"{GITLAB_URL}/{repo_path}.git".replace(
-        "https://", f"https://{GITLAB_AUTH_USER}:{GITLAB_TOKEN}@"
-    )
+    url = f"{GITLAB_URL}/{repo_path}.git"
+    for scheme in ("https://", "http://"):
+        if scheme in url:
+            return url.replace(scheme, f"{scheme}{GITLAB_AUTH_USER}:{GITLAB_TOKEN}@", 1)
+    return url
 
 
 async def _gitlab_api(method: str, path: str, body: dict | None = None) -> dict:
