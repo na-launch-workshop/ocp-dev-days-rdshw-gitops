@@ -1,7 +1,7 @@
 namespace: claude-sandbox
 
 gitlab:
-  url: ""
+  url: "gitlab.gitlab.svc.cluster.local:80"
   tokenSecret: "gitlab-token"
   authUser: "root"
 
