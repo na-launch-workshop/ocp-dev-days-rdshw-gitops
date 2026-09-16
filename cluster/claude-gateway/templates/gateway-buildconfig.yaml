@@ -13,7 +13,7 @@ spec:
     type: Git
     git:
       uri: https://github.com/na-launch-workshop/ocp-dev-days-rdshw-gitops.git
-      ref: dev
+      ref: main
     contextDir: cluster/claude-gateway/gateway
   strategy:
     type: Docker
