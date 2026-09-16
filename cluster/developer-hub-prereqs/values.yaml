@@ -4,7 +4,7 @@ operator:
   channel: fast-1.9
   startingCSV: rhdh-operator.v1.9.3
   installPlanApproval: Automatic
-  source: redhat-operators
+  source: redhat-operators-snapshot
 
 vault:
   name: vault

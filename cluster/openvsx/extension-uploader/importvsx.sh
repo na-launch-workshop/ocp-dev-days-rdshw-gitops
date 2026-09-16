@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 
-set -x
-
-QUERY_RESULT_SIZE=600
+QUERY_RESULT_SIZE=200
 
 function checkLocalVSX() {
   echo "Waiting for OpenVSX server..."
@@ -74,22 +72,39 @@ function getCompatibleRelease() {
   local ext_id=${1}
   local results=0
   local index=0
+  local offset=0
+  local num_releases=0
+  local total_available=0
 
-  local ext_data=$(curl -X GET "https://open-vsx.org/api/v2/-/query?extensionId=${ext_id}&includeAllVersions=true&targetPlatform=${ARCH}&size=${QUERY_RESULT_SIZE}&offset=0" -H 'accept: application/json')
-  results=$(echo "${ext_data}" | jq -r '.totalSize')
-  if [[ ${results} -eq 0 ]]
-  then
-    ext_data=$(curl -X GET "https://open-vsx.org/api/v2/-/query?extensionId=${ext_id}&includeAllVersions=true&targetPlatform=universal&size=${QUERY_RESULT_SIZE}&offset=0" -H 'accept: application/json')
+  while [[ ${num_releases} == 0 ]]
+  do
+    local ext_data=$(curl -X GET "https://open-vsx.org/api/v2/-/query?extensionId=${ext_id}&includeAllVersions=true&targetPlatform=${ARCH}&size=${QUERY_RESULT_SIZE}&offset=${offset}" -H 'accept: application/json')
+    total_available=$(echo "${ext_data}" | jq -r '.totalSize')
     results=$(echo "${ext_data}" | jq -r '.totalSize')
     if [[ ${results} -eq 0 ]]
     then
-      echo "not-found"
+      ext_data=$(curl -X GET "https://open-vsx.org/api/v2/-/query?extensionId=${ext_id}&includeAllVersions=true&targetPlatform=universal&size=${QUERY_RESULT_SIZE}&offset=${offset}" -H 'accept: application/json')
+      total_available=$(echo "${ext_data}" | jq -r '.totalSize')
+      results=$(echo "${ext_data}" | jq -r '.totalSize')
+      if [[ ${results} -eq 0 ]]
+      then
+        echo "not-found"
+        return 1
+      fi
+    fi
+
+    # Check if we've exhausted all results without finding stable releases
+    if [[ ${offset} -ge ${total_available} ]]
+    then
+      echo "no-stable-release-found"
       return 1
     fi
-  fi
-  ext_data=$(echo "${ext_data}" | jq -c '.extensions[] | select(.preRelease==false)')
-  results=$(echo "${ext_data}" | jq -c -s '. | length')
-  while [[ ${index} -lt ${results} ]]
+
+    ext_data=$(echo "${ext_data}" | jq -c '.extensions[] | select(.preRelease==false)')
+    num_releases=$(echo "${ext_data}" | jq -c -s '. | length')
+    offset=$(( ${offset} + ${QUERY_RESULT_SIZE} ))
+  done
+  while [[ ${index} -lt ${num_releases} ]]
   do
     vscode_min_ver=$(echo "${ext_data}" | jq -c -s ".[${index}]" | jq -r '.engines.vscode' | sed 's/\^//g')
     if [[ ${vscode_min_ver} == "*" ]]

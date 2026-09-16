@@ -9,7 +9,7 @@ devspaces:
     installPlanApproval: Manual
     name: devspaces
     source: redhat-operators
-    startingCSV: "devspacesoperator.v3.29.1"
+    startingCSV: "devspacesoperator.v3.30.0"
     sourceNamespace: openshift-marketplace
 
 argocd:

@@ -15,7 +15,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: unsealer
-            image: registry.redhat.io/openshift4/ose-cli:v4.7
+            image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
             volumeMounts:
               - mountPath: /vault-unseal-config
                 name: vault-unseal-config-volume

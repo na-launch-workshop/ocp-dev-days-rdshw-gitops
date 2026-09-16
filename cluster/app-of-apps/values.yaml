@@ -12,8 +12,8 @@ catalogSource:
   enabled: true
   name: redhat-operators-snapshot
   namespace: openshift-marketplace
-  image: quay.io/gpte-devops-automation/olm_snapshot_redhat_catalog
-  tag: v4.20_2026_02_11
+  image: quay.io/rhpds/olm_snapshot_redhat_catalog
+  tag: v4.22_2026_08_03
   displayName: "Red Hat Operators (Snapshot)"
   publisher: "Red Hat Demo Platform"
 

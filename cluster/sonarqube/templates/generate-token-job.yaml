@@ -42,7 +42,7 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: generate-token
-          image: registry.redhat.io/openshift4/ose-cli:latest
+          image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
           env:
             - name: VAULT_NAMESPACE
               value: {{ .Values.vault.namespace | quote }}

@@ -14,7 +14,7 @@ spec:
       valuesObject:
         namespace: {{ .Values.developerHub.namespace }}
         operator:
-          source: redhat-operators
+          source: {{ .Values.catalogSource.name }}
         vault:
           name: {{ .Values.vault.name }}
           namespace: {{ .Values.vault.namespace }}

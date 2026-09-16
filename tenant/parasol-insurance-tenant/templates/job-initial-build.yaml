@@ -18,7 +18,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: trigger-build
-          image: registry.redhat.io/openshift4/ose-cli:latest
+          image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
