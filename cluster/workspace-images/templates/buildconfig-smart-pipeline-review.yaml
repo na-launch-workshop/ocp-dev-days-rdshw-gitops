@@ -1,0 +1,91 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: smart-pipeline-review
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM python:3.12-slim
+      RUN apt-get update && apt-get install -y --no-install-recommends \
+          git \
+          && rm -rf /var/lib/apt/lists/*
+      RUN pip install --no-cache-dir \
+          langchain==0.3.25 \
+          langchain-anthropic==0.3.15 \
+          langgraph==1.0.1 \
+          langgraph-prebuilt==1.0.1 \
+          flake8==7.3.0 \
+          detect-secrets==1.5.0 \
+          pip-audit==2.9.0 \
+          pytest==8.3.5 \
+          radon==6.0.1 \
+          bandit==1.8.5 \
+          mypy==1.16.0 \
+          vulture==2.14
+      WORKDIR /workspace
+  strategy:
+    type: Docker
+  output:
+    to:
+      kind: ImageStreamTag
+      name: smart-pipeline-review:latest
+  runPolicy: Serial
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: smart-pipeline-review-build
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: cekit-builder
+      containers:
+        - name: build-smart-pipeline-review
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get istag smart-pipeline-review:latest
+              do
+                echo "Waiting for smart-pipeline-review image build to complete"
+                oc start-build smart-pipeline-review -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

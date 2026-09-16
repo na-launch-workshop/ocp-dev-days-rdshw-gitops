@@ -27,6 +27,16 @@ spec:
         - port: 5353
           protocol: TCP
     - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gitlab
+          podSelector:
+            matchLabels:
+              app: gitlab
+      ports:
+        - port: 80
+          protocol: TCP
+    - to:
         - ipBlock:
             cidr: 0.0.0.0/0
       ports:
