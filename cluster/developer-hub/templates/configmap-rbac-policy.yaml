@@ -62,12 +62,23 @@ data:
             kinds:
               - system
               - api
-              - template
               - group
               - user
               - location
               - domain
               - resource
+        - allOf:
+            - rule: IS_ENTITY_KIND
+              resourceType: catalog-entity
+              params:
+                kinds:
+                  - template
+            - not:
+                rule: HAS_METADATA
+                resourceType: catalog-entity
+                params:
+                  key: tags
+                  value: backroom
     ---
     result: CONDITIONAL
     roleEntityRef: 'role:default/developer'
