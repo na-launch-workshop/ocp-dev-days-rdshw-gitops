@@ -21,6 +21,7 @@ spec:
       action: fetch:template
       input:
         url: ./skeleton
+        targetPath: backroom
     - id: create-merge-request
       name: Create merge request to enable AI sandbox
       action: publish:gitlab:merge-request
