@@ -60,7 +60,7 @@ data:
             force: true
             repo: '{{ "{{" }} _git_template_repo_url {{ "}}" }}'
             dest: "/tmp/{{ $item.project }}"
-            version: "{{ $item.branch }}"
+            version: "{{ $item.branch | default $.Values.gitops.targetRevision }}"
           environment:
             GIT_SSL_NO_VERIFY: "true"
           register: r_git_clone

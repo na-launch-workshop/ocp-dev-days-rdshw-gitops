@@ -32,4 +32,6 @@ spec:
           value: {{ .Values.vault.name }}
         - name: vault.namespace
           value: {{ .Values.vault.namespace }}
+        - name: gitops.targetRevision
+          value: {{ .Values.gitops.targetRevision }}
 {{ include "app-of-apps.syncPolicy" . | indent 2 }}

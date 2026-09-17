@@ -218,7 +218,7 @@ data:
         gitlab:
           gitlab:
             host: {{ .Values.gitlab.host }}
-            branch: main
+            branch: {{ .Values.gitops.targetRevision }}
             fallbackBranch: main
             entityFilename: catalog-info.yaml
             schedule:

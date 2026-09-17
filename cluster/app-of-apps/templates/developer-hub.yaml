@@ -50,4 +50,6 @@ spec:
           host: sonarqube-sonarqube.{{ .Values.cluster.subdomain }}
         cluster:
           subdomain: {{ .Values.cluster.subdomain }}
+        gitops:
+          targetRevision: {{ .Values.gitops.targetRevision }}
 {{ include "app-of-apps.syncPolicy" . | indent 2 }}

@@ -82,7 +82,6 @@ gitlab:
         - templates/parasol-dev-environment/template.yaml
     - group: workshop
       project: backroom
-      branch: main
       templates:
         - backroom/scaffolder/enable-observability/template.yaml
         - backroom/scaffolder/enable-ai-sandbox/template.yaml
@@ -91,11 +90,14 @@ postgresql:
   dbPassword: passw0rd
   dbName: gitlab_production
 
+gitops:
+  targetRevision: main
+
 cluster:
-  subdomain: 
+  subdomain:
 
 quay:
-  host: 
+  host:
 
 vault:
   name: vault
