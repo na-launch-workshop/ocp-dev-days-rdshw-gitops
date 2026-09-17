@@ -1,15 +1,15 @@
-{{- if .Values.claudeGateway.enabled }}
+{{- if .Values.aiSandbox.enabled }}
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-{{ include "app-of-apps.metadata" (dict "name" .Values.claudeGateway.name "namespace" .Values.argocd.namespace "syncWave" "3") }}
+{{ include "backroom.metadata" (dict "name" .Values.aiSandbox.claudeGateway.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
 spec:
   destination:
-    namespace: {{ .Values.claudeGateway.namespace }}
+    namespace: {{ .Values.aiSandbox.claudeGateway.namespace }}
     server: https://kubernetes.default.svc
   project: default
   source:
     path: cluster/claude-gateway
     repoURL: {{ .Values.gitops.repoURL }}
     targetRevision: {{ .Values.gitops.targetRevision }}
-{{ include "app-of-apps.syncPolicy" . | indent 2 }}
+{{ include "backroom.syncPolicy" . | indent 2 }}
 {{- end }}

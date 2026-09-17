@@ -1,0 +1,9 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: backroom-templates
+  description: Backroom add-on templates for cluster administrators
+spec:
+  targets:
+    - ./scaffolder/enable-observability/template.yaml
+    - ./scaffolder/enable-ai-sandbox/template.yaml

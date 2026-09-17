@@ -1,0 +1,19 @@
+{{- if .Values.observability.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "backroom.metadata" (dict "name" .Values.observability.opentelemetry.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
+spec:
+  destination:
+    namespace: {{ .Values.observability.opentelemetry.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/opentelemetry
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        subscription:
+          source: {{ .Values.catalogSource.source }}
+{{ include "backroom.syncPolicy" . | indent 2 }}
+{{- end }}

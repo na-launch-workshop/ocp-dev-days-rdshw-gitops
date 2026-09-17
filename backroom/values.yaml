@@ -1,0 +1,30 @@
+gitops:
+  repoURL: https://github.com/na-launch-workshop/ocp-dev-days-rdshw-gitops.git
+  targetRevision: main
+
+argocd:
+  namespace: openshift-gitops
+
+cluster:
+  subdomain: ""
+
+catalogSource:
+  source: redhat-operators-snapshot
+
+observability:
+  enabled: false
+  tempo:
+    name: tempo
+    namespace: tempo
+  opentelemetry:
+    name: opentelemetry
+    namespace: opentelemetry
+
+aiSandbox:
+  enabled: false
+  sandboxedContainers:
+    name: sandboxed-containers
+    namespace: openshift-sandboxed-containers-operator
+  claudeGateway:
+    name: claude-gateway
+    namespace: claude-sandbox

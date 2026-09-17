@@ -1,0 +1,42 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: enable-observability
+  title: Enable Observability
+  description: Deploy OpenTelemetry and Tempo
+  tags:
+    - backroom
+spec:
+  type: backroom
+  owner: group:default/admins
+  parameters:
+    - title: Enable Observability Stack
+      description: >-
+        This will deploy the Tempo distributed tracing backend and the
+        OpenTelemetry collector to the cluster.
+  steps:
+    - id: render-override
+      name: Render override file
+      action: fetch:template
+      input:
+        url: ./skeleton
+    - id: create-merge-request
+      name: Create merge request to enable observability
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: "{{ gitlab_host }}?owner=workshop&repo=backroom"
+        branchName: enable-observability
+        title: "Enable Observability"
+        description: "Enable Tempo and OpenTelemetry deployment via backroom add-on"
+        commitMessage: "Enable observability backroom add-on"
+        removeSourceBranch: true
+    - id: auto-merge
+      name: Merge the request
+      action: http:backstage:request
+      input:
+        method: PUT
+        path: /api/proxy/gitlab/api/projects/workshop%2Fbackroom/merge_requests/${{ steps['create-merge-request'].output.mergeRequestNumber }}/merge
+  output:
+    links:
+      - title: Open ArgoCD
+        url: https://openshift-gitops-server-openshift-gitops.{{ cluster_subdomain }}/applications/openshift-gitops/backroom

@@ -262,6 +262,13 @@ data:
             X-Requested-With: XMLHttpRequest
           changeOrigin: true
           secure: false
+        '/gitlab/api':
+          target: https://{{ .Values.gitlab.host }}/api/v4
+          headers:
+            PRIVATE-TOKEN: ${GITLAB_TOKEN}
+          changeOrigin: true
+          secure: false
+          allowedMethods: ['GET', 'PUT', 'POST']
 
     kubernetes:
       serviceLocatorMethod:

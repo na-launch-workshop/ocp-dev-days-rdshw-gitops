@@ -1,0 +1,43 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: enable-ai-sandbox
+  title: Enable AI Sandbox
+  description: Deploy OpenShift sandboxed containers and Claude Gateway
+  tags:
+    - backroom
+spec:
+  type: backroom
+  owner: group:default/admins
+  parameters:
+    - title: Enable AI Sandbox
+      description: >-
+        This will deploy the OpenShift Sandboxed Containers operator (Kata)
+        and the Claude Gateway to the cluster. Note: KataConfig takes
+        several minutes to configure worker nodes.
+  steps:
+    - id: render-override
+      name: Render override file
+      action: fetch:template
+      input:
+        url: ./skeleton
+    - id: create-merge-request
+      name: Create merge request to enable AI sandbox
+      action: publish:gitlab:merge-request
+      input:
+        repoUrl: "{{ gitlab_host }}?owner=workshop&repo=backroom"
+        branchName: enable-ai-sandbox
+        title: "Enable AI Sandbox"
+        description: "Enable Sandboxed Containers and Claude Gateway deployment via backroom add-on"
+        commitMessage: "Enable AI sandbox backroom add-on"
+        removeSourceBranch: true
+    - id: auto-merge
+      name: Merge the request
+      action: http:backstage:request
+      input:
+        method: PUT
+        path: /api/proxy/gitlab/api/projects/workshop%2Fbackroom/merge_requests/${{ steps['create-merge-request'].output.mergeRequestNumber }}/merge
+  output:
+    links:
+      - title: Open ArgoCD
+        url: https://openshift-gitops-server-openshift-gitops.{{ cluster_subdomain }}/applications/openshift-gitops/backroom

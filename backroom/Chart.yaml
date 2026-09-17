@@ -1,0 +1,5 @@
+apiVersion: v2
+name: backroom
+description: Backroom app-of-apps for day-2 cluster add-ons
+type: application
+version: 0.1.0
