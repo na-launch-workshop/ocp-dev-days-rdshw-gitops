@@ -218,12 +218,20 @@ data:
         gitlab:
           gitlab:
             host: {{ .Values.gitlab.host }}
-            branch: {{ .Values.gitops.targetRevision }}
-            fallbackBranch: main
+            branch: main
             entityFilename: catalog-info.yaml
             schedule:
               frequency: { minutes: 5 }
               timeout: { minutes: 3 }
+{{- if ne .Values.gitops.targetRevision "main" }}
+          gitlab-dev:
+            host: {{ .Values.gitlab.host }}
+            branch: {{ .Values.gitops.targetRevision }}
+            entityFilename: catalog-info.yaml
+            schedule:
+              frequency: { minutes: 5 }
+              timeout: { minutes: 3 }
+{{- end }}
 
     argocd:
       appLocatorMethods:
