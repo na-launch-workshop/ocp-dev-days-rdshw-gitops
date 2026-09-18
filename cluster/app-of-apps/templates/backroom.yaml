@@ -7,7 +7,7 @@ spec:
     server: https://kubernetes.default.svc
   project: default
   source:
-    path: backroom
+    path: .
     repoURL: https://{{ .Values.gitlab.host }}/workshop/backroom.git
     targetRevision: {{ .Values.gitops.targetRevision }}
     helm:

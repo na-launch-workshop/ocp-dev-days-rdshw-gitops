@@ -63,7 +63,7 @@ gitlab:
         - name: workshop-catalog-entities
           url: https://github.com/na-launch-workshop/workshop-catalog-entities.git
         - name: backroom
-          url: https://github.com/na-launch-workshop/ocp-dev-days-rdshw-gitops.git
+          url: https://github.com/na-launch-workshop/ocp-dev-days-rdshw-backroom.git
       users:
         - id: dev1
         - id: dev2
@@ -83,8 +83,8 @@ gitlab:
     - group: workshop
       project: backroom
       templates:
-        - backroom/scaffolder/enable-observability/template.yaml
-        - backroom/scaffolder/enable-ai-sandbox/template.yaml
+        - scaffolder/enable-observability/template.yaml
+        - scaffolder/enable-ai-sandbox/template.yaml
 postgresql:
   dbUser: gitlab
   dbPassword: passw0rd
