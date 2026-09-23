@@ -102,3 +102,4 @@ developerHub:
 
 backroom:
   name: backroom
+  targetRevision: main

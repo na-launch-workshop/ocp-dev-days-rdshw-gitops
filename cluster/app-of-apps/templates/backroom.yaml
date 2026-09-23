@@ -9,7 +9,7 @@ spec:
   source:
     path: .
     repoURL: https://{{ .Values.gitlab.host }}/workshop/backroom.git
-    targetRevision: {{ .Values.gitops.targetRevision }}
+    targetRevision: {{ .Values.backroom.targetRevision | default "main" }}
     helm:
       valueFiles:
         - values.yaml
