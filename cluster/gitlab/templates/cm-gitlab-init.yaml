@@ -330,10 +330,25 @@ data:
             - r_vault.resources[0].status.phase is defined
             - r_vault.resources[0].status.phase == 'Running'
 
+        - name: Get Vault root token
+          ansible.builtin.shell: |
+            oc exec {{ .Values.vault.name }}-0 -n {{ .Values.vault.namespace }} -- cat /vault/data/vault-auto-unseal-keys.txt
+          register: r_vault_keys
+
+        - name: Set vault token fact
+          ansible.builtin.set_fact:
+            vault_token: '{{ "{{" }} r_vault_keys.stdout | regex_search("root_token: (.+)", "\1") | first {{ "}}" }}'
+
+        - name: Login to Vault
+          kubernetes.core.k8s_exec:
+            namespace: {{ .Values.vault.namespace }}
+            pod: {{ .Values.vault.name }}-0
+            command: 'vault login {{ "{{" }} vault_token {{ "}}" }}'
+
         - name: Create vault secrets for Gitlab
           kubernetes.core.k8s_exec:
             namespace: {{ .Values.vault.namespace }}
-            pod: {{ .Values.vault.namespace }}-0
+            pod: {{ .Values.vault.name }}-0
             command: '{{ "{{" }} item {{ "}}" }}'
           loop:
             - 'vault kv put kv/secrets/gitlab/token value={{ "{{" }} root_token {{ "}}" }}'
@@ -369,7 +384,7 @@ data:
         - name: Store DevSpaces GitLab OAuth credentials in Vault
           kubernetes.core.k8s_exec:
             namespace: {{ .Values.vault.namespace }}
-            pod: {{ .Values.vault.namespace }}-0
+            pod: {{ .Values.vault.name }}-0
             command: '{{ "{{" }} item {{ "}}" }}'
           loop:
             - 'vault kv put kv/secrets/gitlab/devspaces-oauth id={{ "{{" }} r_devspaces_oauth_app.json.application_id {{ "}}" }} secret={{ "{{" }} r_devspaces_oauth_app.json.secret {{ "}}" }}'

@@ -61,7 +61,6 @@ data:
           params:
             kinds:
               - system
-              - api
               - group
               - user
               - location
