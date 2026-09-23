@@ -82,6 +82,7 @@ gitlab:
         - templates/parasol-dev-environment/template.yaml
     - group: workshop
       project: backroom
+      branch: main
       templates:
         - scaffolder/enable-observability/template.yaml
         - scaffolder/enable-ai-sandbox/template.yaml
