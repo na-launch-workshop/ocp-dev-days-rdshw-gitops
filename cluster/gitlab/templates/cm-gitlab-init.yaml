@@ -169,7 +169,7 @@ data:
               name: '{{ "{{" }} item.name {{ "}}" }}'
               import_url: '{{ "{{" }} item.url {{ "}}" }}'
               visibility: public
-              builds_access_level: enabled
+              builds_access_level: disabled
               auto_devops_enabled: false
               remove_source_branch_after_merge: false
               only_allow_merge_if_pipeline_succeeds: '{{ "{{" }} item.checkPipeline {{ "}}" }}'
@@ -231,6 +231,7 @@ data:
               name: {{ $item1.name }}
               visibility: public
               issues_access_level: enabled
+              builds_access_level: disabled
               auto_devops_enabled: false
               remove_source_branch_after_merge: false
               namespace_id: '{{ "{{" }} r_group.json.id {{ "}}" }}'

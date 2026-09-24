@@ -1,0 +1,21 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  labels:
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: lightspeed-operator
+    app.kubernetes.io/instance: leader-election-rolebinding
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/name: rolebinding
+    app.kubernetes.io/part-of: lightspeed-operator
+  name: lightspeed-operator-leader-election-rolebinding
+  namespace: {{ .Values.namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: lightspeed-operator-leader-election-role
+subjects:
+- kind: ServiceAccount
+  name: lightspeed-operator-controller-manager
+  namespace: {{ .Values.namespace }}

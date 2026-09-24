@@ -1,0 +1,15 @@
+{{- if .Values.clusterObservability.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" "cluster-observability" "namespace" .Values.argocd.namespace "syncWave" "0") }}
+spec:
+  destination:
+    namespace: openshift-operators
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/cluster-observability
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+{{ include "app-of-apps.syncPolicy" . | indent 2 }}
+{{- end }}

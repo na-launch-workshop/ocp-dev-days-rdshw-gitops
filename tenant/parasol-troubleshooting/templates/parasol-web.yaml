@@ -1,0 +1,109 @@
+{{- $ns := include "parasol-troubleshooting.web-ns" . -}}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    purpose: troubleshooting
+  annotations:
+    argocd.argoproj.io/sync-wave: "-1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: {{ $ns }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+        tier: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: registry.access.redhat.com/ubi9:latest
+        command: ["/bin/sh"]
+        args:
+        - -c
+        - |
+          while true; do
+            echo "Trying to connect to backend-service..."
+            if curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 http://backend-service:8080 | grep -q "200"; then
+              echo "Success!"
+            else
+              echo "ERROR: Connection timeout to backend-service!"
+            fi
+            sleep 15
+          done
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: {{ $ns }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        tier: backend
+    spec:
+      containers:
+      - name: backend
+        image: registry.access.redhat.com/hi/nginx:1.30
+        ports:
+        - containerPort: 8080
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "10m"
+          limits:
+            memory: "64Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: {{ $ns }}
+spec:
+  selector:
+    app: backend
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-network-policy
+  namespace: {{ $ns }}
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          tier: backend
+    ports:
+    - protocol: TCP
+      port: 8080

@@ -1,0 +1,34 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mcp-config
+  namespace: {{ .Release.Namespace }}
+data:
+  config.toml: |
+    toolsets = [{{- range $i, $t := .Values.toolsets }}{{- if $i }},{{ end }}"{{ $t }}"{{- end }}]
+    log_level = 0
+    port = "8080"
+    read_only = false
+    cluster_auth_mode = "passthrough"
+    skip_jwt_verification = true
+    server_instructions = """
+    This MCP server provides access to a live OpenShift cluster. Before executing any
+    destructive operation (delete, scale down, patch, restart), clearly warn the user
+    about the consequences and ask for explicit confirmation. Never delete namespaces,
+    persistent volumes, or cluster-scoped resources without double confirmation. When
+    in doubt, prefer read-only operations and present findings before proposing changes.
+    """
+
+    [toolset_configs.metrics]
+    prometheus_url = "https://thanos-querier.openshift-monitoring.svc.cluster.local:9091"
+    insecure = true
+    auth_mode = "header"
+
+    [toolset_configs.netedge]
+    auth_mode = "header"
+    insecure = true
+
+    [toolset_configs.kiali]
+    url = "https://kiali.istio-system.svc.cluster.local:20001"
+    insecure = true

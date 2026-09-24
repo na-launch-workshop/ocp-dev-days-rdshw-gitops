@@ -1,0 +1,136 @@
+{{- $ns := include "parasol-troubleshooting.payments-ns" . -}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payments-api
+  namespace: {{ $ns }}
+spec:
+  selector:
+    matchLabels:
+      app: payments-api
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: postgres
+  namespace: {{ $ns }}
+spec:
+  selector:
+    matchLabels:
+      app: postgres
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: reporting-service
+  namespace: {{ $ns }}
+spec:
+  selector:
+    matchLabels:
+      app: reporting-service
+  endpoints:
+    - port: metrics
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payment-alerts
+  namespace: {{ $ns }}
+spec:
+  groups:
+    - name: payments.business
+      rules:
+        - alert: PaymentErrorRateHigh
+          expr: |
+            sum(rate(http_requests_total{namespace="{{ $ns }}", code=~"5.."}[1m]))
+            / sum(rate(http_requests_total{namespace="{{ $ns }}"}[1m])) * 100 > 15
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: Payment error rate critical
+            description: 'Payment error rate is {{`{{ $value | printf "%.2f" }}`}}%, which exceeds the 15% threshold.'
+    - name: payments.database
+      rules:
+        - alert: PostgresqlTooManyConnections
+          expr: |
+            sum(pg_stat_activity_count{namespace="{{ $ns }}"}) > 13
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: Too many database connections
+            description: '{{`{{ $value }}`}} active connections detected. This may indicate connection leaks.'
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: reporting-service-rollout
+  namespace: {{ $ns }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: reporting-service-rollout
+  namespace: {{ $ns }}
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: reporting-service-rollout
+  namespace: {{ $ns }}
+subjects:
+  - kind: ServiceAccount
+    name: reporting-service-rollout
+    namespace: {{ $ns }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: reporting-service-rollout
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: reporting-service-rollout
+  namespace: {{ $ns }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      serviceAccountName: reporting-service-rollout
+      restartPolicy: Never
+      containers:
+        - name: rollout
+          image: registry.redhat.io/openshift4/ose-cli-rhel9:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting 10 minutes before triggering rollout..."
+              sleep 600
+              echo "Patching reporting-service to v1.0.2..."
+              oc -n {{ $ns }} set image deployment/reporting-service reporting-service=quay.io/afalossi/ts01-reporting-service:v1.0.2
+              oc -n {{ $ns }} rollout status deployment/reporting-service --timeout=120s

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openshift-lightspeed
+description: OpenShift Lightspeed Operator (direct install, not OLM)
+type: application
+version: 0.1.0

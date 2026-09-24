@@ -1,0 +1,5 @@
+apiVersion: v2
+name: parasol-troubleshooting
+description: Parasol Insurance troubleshooting scenarios for OLS exercises
+type: application
+version: 0.1.0

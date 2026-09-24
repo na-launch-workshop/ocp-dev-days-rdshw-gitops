@@ -245,13 +245,15 @@ data:
           delay: 5
           until: r_import_repos is not failed
 
-        - name: Ensure tenant repos are public
+        - name: Ensure tenant repos are public and disable CI/CD
           ansible.builtin.uri:
             url: https://{{ "{{" }} gitlab_host {{ "}}" }}/api/v4/projects/{{ "{{" }} tenant_username {{ "}}" }}%2F{{ "{{" }} item {{ "}}" }}
             method: PUT
             body_format: json
             body:
               visibility: public
+              builds_access_level: disabled
+              auto_devops_enabled: false
             headers:
               PRIVATE-TOKEN: '{{ "{{" }} root_token {{ "}}" }}'
             validate_certs: false

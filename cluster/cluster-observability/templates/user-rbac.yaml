@@ -1,0 +1,66 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workshop-monitoring-view
+rules:
+  - apiGroups:
+      - monitoring.coreos.com
+    resourceNames:
+      - k8s
+    resources:
+      - prometheuses/api
+    verbs:
+      - get
+      - create
+      - update
+  - apiGroups:
+      - monitoring.coreos.com
+    resourceNames:
+      - main
+    resources:
+      - alertmanagers/api
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-users-monitoring-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: workshop-monitoring-view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:authenticated
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: perses-view
+rules:
+  - apiGroups:
+      - perses.dev
+    resources:
+      - persesdashboards
+      - persesdatasources
+      - persesglobaldatasources
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workshop-users-perses-view
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: perses-view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: system:authenticated

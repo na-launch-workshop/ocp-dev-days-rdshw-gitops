@@ -1,0 +1,40 @@
+apiVersion: ols.openshift.io/v1alpha1
+kind: OLSConfig
+metadata:
+  name: cluster
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  featureGates:
+    - MCPServer
+  llm:
+    providers:
+      - credentialsSecretRef:
+          name: llm-credentials
+        models:
+          - name: {{ .Values.llm.model }}
+        name: {{ .Values.llm.provider }}
+        type: {{ .Values.llm.provider }}
+        url: {{ .Values.llm.apiUrl | quote }}
+  mcpServers:
+    - name: openshift-mcp
+      url: http://openshift-mcp-server.openshift-mcp.svc.cluster.local:8080/mcp
+      timeout: 120
+      headers:
+        - name: kubernetes-authorization
+          valueFrom:
+            type: kubernetes
+  ols:
+    logLevel: INFO
+    maxIterations: 75
+    toolsApprovalConfig:
+      approvalType: never
+    defaultModel: {{ .Values.llm.model }}
+    defaultProvider: {{ .Values.llm.provider }}
+    conversationCache:
+      type: postgres
+      postgres:
+        sharedBuffers: 256MB
+        maxConnections: 2000

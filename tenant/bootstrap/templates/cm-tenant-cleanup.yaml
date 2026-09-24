@@ -126,3 +126,22 @@ data:
           loop: >-
             {{ "{{" }} lookup('kubernetes.core.k8s', api_version='argoproj.io/v1alpha1', kind='Application', namespace='openshift-gitops') | selectattr('metadata.name', 'contains', tenant_username) | selectattr('metadata.name', 'contains', 'bootstrap') | map(attribute='metadata.name') | list {{ "}}" }}
           ignore_errors: true
+
+        - name: Find orphaned user namespaces
+          kubernetes.core.k8s_info:
+            api_version: v1
+            kind: Namespace
+            label_selectors:
+              - kubernetes.io/metadata.name~={{ "{{" }} tenant_username {{ "}}" }}-
+          register: r_user_namespaces
+
+        - name: Delete orphaned user namespaces
+          kubernetes.core.k8s:
+            api_version: v1
+            kind: Namespace
+            name: "{{ "{{" }} item.metadata.name {{ "}}" }}"
+            state: absent
+          loop: "{{ "{{" }} r_user_namespaces.resources {{ "}}" }}"
+          loop_control:
+            label: "{{ "{{" }} item.metadata.name {{ "}}" }}"
+          when: r_user_namespaces.resources | length > 0

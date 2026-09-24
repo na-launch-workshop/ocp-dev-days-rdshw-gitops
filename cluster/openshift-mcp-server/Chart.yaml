@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openshift-mcp-server
+description: OpenShift MCP Server for Lightspeed cluster interaction
+type: application
+version: 0.1.0

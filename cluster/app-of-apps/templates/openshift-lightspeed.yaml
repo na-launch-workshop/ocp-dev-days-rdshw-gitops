@@ -1,0 +1,24 @@
+{{- if .Values.openshiftLightspeed.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" "openshift-lightspeed" "namespace" .Values.argocd.namespace "syncWave" "2") }}
+spec:
+  destination:
+    namespace: {{ .Values.openshiftLightspeed.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  ignoreDifferences:
+    - group: ols.openshift.io
+      kind: OLSConfig
+      jsonPointers:
+        - /spec/llm
+  source:
+    path: cluster/openshift-lightspeed
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        llm:
+          apiUrl: {{ .Values.vault.secrets.litellm.apiUrl | quote }}
+{{ include "app-of-apps.syncPolicy" . | indent 2 }}
+{{- end }}

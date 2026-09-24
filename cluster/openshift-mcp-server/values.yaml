@@ -1,0 +1,9 @@
+namespace: openshift-mcp
+name: openshift-mcp-server
+image: registry.redhat.io/openshift-mcp-tech-preview/openshift-mcp-server-rhel9:0.3
+
+toolsets:
+  - core
+  - config
+  - metrics
+  - openshift

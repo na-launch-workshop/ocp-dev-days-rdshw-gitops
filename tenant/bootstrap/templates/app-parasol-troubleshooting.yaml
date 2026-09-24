@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.tenant.username }}-parasol-troubleshooting
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: {{ .Values.argocd.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      name: reporting-service
+      namespace: {{ .Values.tenant.username }}-parasol-payments
+      jsonPointers:
+        - /spec/template/spec/containers/0/image
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+      name: backend-network-policy
+      namespace: {{ .Values.tenant.username }}-parasol-web
+      jsonPointers:
+        - /spec
+  source:
+    path: tenant/parasol-troubleshooting
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        tenant:
+          username: {{ .Values.tenant.username }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m0s
+      limit: 30
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

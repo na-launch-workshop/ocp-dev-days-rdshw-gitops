@@ -1,0 +1,27 @@
+---
+apiVersion: perses.dev/v1alpha2
+kind: PersesGlobalDatasource
+metadata:
+  name: perses-global-ds
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  client:
+    tls:
+      caCert:
+        certPath: /ca/service-ca.crt
+        type: file
+      enable: true
+  config:
+    default: true
+    display:
+      name: Perses Datasource
+    plugin:
+      kind: PrometheusDatasource
+      spec:
+        proxy:
+          kind: HTTPProxy
+          spec:
+            secret: perses-global-ds-secret
+            url: https://thanos-querier.openshift-monitoring.svc.cluster.local:9091
