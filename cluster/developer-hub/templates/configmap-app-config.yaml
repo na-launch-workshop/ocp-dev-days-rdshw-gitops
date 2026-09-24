@@ -219,11 +219,19 @@ data:
           gitlab:
             host: {{ .Values.gitlab.host }}
             branch: main
-            fallbackBranch: main
             entityFilename: catalog-info.yaml
             schedule:
               frequency: { minutes: 5 }
               timeout: { minutes: 3 }
+{{- if ne .Values.gitops.targetRevision "main" }}
+          gitlab-dev:
+            host: {{ .Values.gitlab.host }}
+            branch: {{ .Values.gitops.targetRevision }}
+            entityFilename: catalog-info.yaml
+            schedule:
+              frequency: { minutes: 5 }
+              timeout: { minutes: 3 }
+{{- end }}
 
     argocd:
       appLocatorMethods:
@@ -262,6 +270,13 @@ data:
             X-Requested-With: XMLHttpRequest
           changeOrigin: true
           secure: false
+        '/gitlab/api':
+          target: https://{{ .Values.gitlab.host }}/api/v4
+          headers:
+            PRIVATE-TOKEN: ${GITLAB_TOKEN}
+          changeOrigin: true
+          secure: false
+          allowedMethods: ['GET', 'PUT', 'POST']
 
     kubernetes:
       serviceLocatorMethod:

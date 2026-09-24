@@ -21,4 +21,7 @@ sonarqube:
 cluster:
   subdomain: ""
 
+gitops:
+  targetRevision: main
+
 devMode: false

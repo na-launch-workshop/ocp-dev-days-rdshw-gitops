@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" .Values.backroom.name "namespace" .Values.argocd.namespace "syncWave" "4") }}
+spec:
+  destination:
+    namespace: {{ .Values.argocd.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: .
+    repoURL: https://{{ .Values.gitlab.host }}/workshop/backroom.git
+    targetRevision: {{ .Values.backroom.targetRevision | default "main" }}
+    helm:
+      valueFiles:
+        - values.yaml
+        - overrides-observability.yaml
+        - overrides-ai-sandbox.yaml
+      valuesObject:
+        gitops:
+          repoURL: {{ .Values.gitops.repoURL }}
+          targetRevision: {{ .Values.gitops.targetRevision }}
+        cluster:
+          subdomain: {{ .Values.cluster.subdomain }}
+        catalogSource:
+          source: {{ include "app-of-apps.operatorSource" . }}
+{{ include "app-of-apps.syncPolicy" . | indent 2 }}

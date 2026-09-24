@@ -62,6 +62,8 @@ gitlab:
           url: https://github.com/na-launch-workshop/workshop-devhub-kick_off_scaffolder.git
         - name: workshop-catalog-entities
           url: https://github.com/na-launch-workshop/workshop-catalog-entities.git
+        - name: backroom
+          url: https://github.com/na-launch-workshop/ocp-dev-days-rdshw-backroom.git
       users:
         - id: dev1
         - id: dev2
@@ -78,16 +80,25 @@ gitlab:
       branch: main
       templates:
         - templates/parasol-dev-environment/template.yaml
+    - group: workshop
+      project: backroom
+      branch: main
+      templates:
+        - scaffolder/enable-observability/template.yaml
+        - scaffolder/enable-ai-sandbox/template.yaml
 postgresql:
   dbUser: gitlab
   dbPassword: passw0rd
   dbName: gitlab_production
 
+gitops:
+  targetRevision: main
+
 cluster:
-  subdomain: 
+  subdomain:
 
 quay:
-  host: 
+  host:
 
 vault:
   name: vault
