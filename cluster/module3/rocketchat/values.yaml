@@ -1,0 +1,45 @@
+namespace: rocketchat
+
+cluster:
+  subdomain: ""
+
+mongodb:
+  image: quay.io/redhatintegration/mongo:6.0.6
+  adminUser: rocketchat-admin
+  adminPassword: rocketchat
+  storage:
+    configdb:
+      size: 5Gi
+    db:
+      size: 5Gi
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: "1000m"
+
+rocketchat:
+  image: quay.io/redhatintegration/rocket.chat:6.2.0
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: "1000m"
+
+rocketchat_admin:
+  username: rcadmin
+  password: camel
+  email: rcadmin@camel
+  twofa_sha256: "4812585e944994cb91cae8b4d8d87a155e6b1a165d8bdf5ab75752c4f04b9724"
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    configAndStorage: "0"
+    database: "1"
+    workloads: "2"

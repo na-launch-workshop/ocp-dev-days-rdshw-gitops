@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-kuadrant-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  playbook.yaml: |
+    ---
+    - name: Kuadrant API key generation + Vault write
+      hosts: localhost
+      gather_facts: false
+      vars:
+        username: {{ .Values.tenant.username | quote }}
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+      tasks:
+        - name: Check for existing Kuadrant keys in Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: "vault kv get -format=json kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/kuadrant"
+          register: r_existing_keys
+          failed_when: false
+
+        - name: Generate and write keys (only if not already in Vault)
+          when: r_existing_keys.rc != 0
+          block:
+            - name: Generate Silver API key
+              ansible.builtin.set_fact:
+                silver_api_key: "silver-{{ "{{" }} username {{ "}}" }}-{{ "{{" }} lookup('password', '/dev/null chars=ascii_letters,digits length=12') {{ "}}" }}"
+
+            - name: Generate Gold API key
+              ansible.builtin.set_fact:
+                gold_api_key: "gold-{{ "{{" }} username {{ "}}" }}-{{ "{{" }} lookup('password', '/dev/null chars=ascii_letters,digits length=12') {{ "}}" }}"
+
+            - name: Write Kuadrant API keys to Vault
+              kubernetes.core.k8s_exec:
+                namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+                pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+                command: >-
+                  vault kv put kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/kuadrant
+                  silver_api_key={{ "{{" }} silver_api_key {{ "}}" }}
+                  gold_api_key={{ "{{" }} gold_api_key {{ "}}" }}
+              register: r_vault_write
+              failed_when: r_vault_write.rc != 0
+
+            - name: Verify Vault write
+              kubernetes.core.k8s_exec:
+                namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+                pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+                command: "vault kv get -format=json kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/kuadrant"
+              register: r_vault_read
+              failed_when: r_vault_read.rc != 0
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m3-kuadrant-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kuadrant-provision
+          command:
+            - /bin/bash
+            - '-c'
+            - |
+              set -x
+              ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-kuadrant-provision-{{ .Values.tenant.username }}

@@ -1,0 +1,132 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-hd-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: Helpdesk cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        hd_url: "http://helpdesk.{{ .Values.helpdesk.namespace }}.svc.cluster.local:8118"
+        admin_user: {{ .Values.helpdesk.admin.username | quote }}
+        admin_pass: {{ .Values.helpdesk.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        group_name: "Group {{ .Values.tenant.username }}"
+      tasks:
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/login"
+            method: POST
+            body_format: json
+            body:
+              username: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+          ignore_errors: true
+
+        - name: Skip if Trudesk unreachable
+          ansible.builtin.meta: end_play
+          when: r_admin_login is failed
+
+        - name: Set admin token
+          ansible.builtin.set_fact:
+            access_token: "{{ "{{" }} r_admin_login.json.accessToken {{ "}}" }}"
+
+        - name: Get all tickets
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/tickets"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          register: r_tickets
+          ignore_errors: true
+
+        - name: Filter tickets owned by user
+          ansible.builtin.set_fact:
+            user_tickets: "{{ "{{" }} r_tickets.json | default([]) | selectattr('owner.username', 'equalto', username) | list {{ "}}" }}"
+          when: r_tickets is succeeded
+
+        - name: Soft-delete user tickets
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/tickets/{{ "{{" }} item._id {{ "}}" }}"
+            method: DELETE
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          loop: "{{ "{{" }} user_tickets | default([]) {{ "}}" }}"
+          loop_control:
+            label: "{{ "{{" }} item.uid | default('?') {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Delete user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/users/{{ "{{" }} username {{ "}}" }}"
+            method: DELETE
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Fetch all groups
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/groups/all"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          register: r_groups
+          ignore_errors: true
+
+        - name: Find group ID
+          ansible.builtin.set_fact:
+            group_id: "{{ "{{" }} r_groups.json.groups | selectattr('name', 'equalto', group_name) | map(attribute='_id') | first | default('') {{ "}}" }}"
+          when: r_groups is succeeded
+
+        - name: Delete group
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/groups/{{ "{{" }} group_id {{ "}}" }}"
+            method: DELETE
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          when:
+            - group_id is defined
+            - group_id | length > 0
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: hd-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hd-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-hd-cleanup-{{ .Values.tenant.username }}

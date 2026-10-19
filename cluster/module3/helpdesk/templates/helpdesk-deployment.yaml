@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helpdesk
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: helpdesk
+  annotations:
+    {{- include "helpdesk.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: helpdesk
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: helpdesk
+    spec:
+      containers:
+      - name: helpdesk
+        image: {{ .Values.helpdesk.image }}
+        resources:
+          requests:
+            memory: {{ .Values.helpdesk.resources.requests.memory | quote }}
+            cpu: {{ .Values.helpdesk.resources.requests.cpu | quote }}
+          limits:
+            memory: {{ .Values.helpdesk.resources.limits.memory | quote }}
+            cpu: {{ .Values.helpdesk.resources.limits.cpu | quote }}
+        ports:
+        - containerPort: 8118
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          value: production
+        - name: TRUDESK_DOCKER
+          value: "true"
+        - name: TD_MONGODB_SERVER
+          value: helpdesk-db
+        - name: TD_MONGODB_PORT
+          value: "27017"
+        - name: TD_MONGODB_USERNAME
+          value: {{ .Values.mongodb.user }}
+        - name: TD_MONGODB_PASSWORD
+          value: {{ .Values.mongodb.password | quote }}
+        - name: TD_MONGODB_DATABASE
+          value: {{ .Values.mongodb.database }}
+        command: ["/bin/sh", "-c"]
+        args: ["sh /scripts/entrypoint.sh"]
+        volumeMounts:
+        - name: scripts
+          mountPath: /scripts
+          readOnly: true
+      volumes:
+      - name: scripts
+        configMap:
+          name: helpdesk-scripts
+          defaultMode: 0755

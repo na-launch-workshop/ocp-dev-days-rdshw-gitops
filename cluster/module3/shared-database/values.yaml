@@ -1,0 +1,27 @@
+namespace: shared-database
+
+postgres:
+  image: registry.redhat.io/rhel9/postgresql-16:latest
+  database: labdb
+  adminUser: dbadmin
+  adminPassword: dbadmin123
+  storage: 1Gi
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+admin:
+  namespace: admin-m3
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    networkpolicies: "0"
+    rbac: "0"
+    database: "1"
+    skupper: "2"

@@ -1,0 +1,80 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-s3-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: S3 cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+        bucket_name: {{ .Values.tenant.username | quote }}
+      tasks:
+        - name: Read S3 credentials from Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: vault kv get -format=json kv/secrets/s3/noobaa
+          register: r_vault_s3
+          failed_when: r_vault_s3.rc != 0
+
+        - name: Parse S3 credentials
+          ansible.builtin.set_fact:
+            s3_access_key: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.accessKey {{ "}}" }}"
+            s3_secret_key: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.secretKey {{ "}}" }}"
+            s3_endpoint: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.endpoint {{ "}}" }}"
+
+        - name: Delete S3 bucket and contents
+          amazon.aws.s3_bucket:
+            name: "{{ "{{" }} bucket_name {{ "}}" }}"
+            state: absent
+            force: true
+            aws_access_key: "{{ "{{" }} s3_access_key {{ "}}" }}"
+            aws_secret_key: "{{ "{{" }} s3_secret_key {{ "}}" }}"
+            endpoint_url: "{{ "{{" }} s3_endpoint {{ "}}" }}"
+            validate_certs: false
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: s3-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: s3-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-s3-cleanup-{{ .Values.tenant.username }}

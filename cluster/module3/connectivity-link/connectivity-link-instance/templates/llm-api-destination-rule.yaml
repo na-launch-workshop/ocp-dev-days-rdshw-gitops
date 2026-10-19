@@ -1,0 +1,16 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: DestinationRule
+metadata:
+  name: ai-origination
+  namespace: {{ .Values.llmApi.namespace }}
+  labels:
+    {{- include "connectivity-link.labels" . | nindent 4 }}
+  annotations:
+    {{- include "connectivity-link.config-syncwave" . | nindent 4 }}
+spec:
+  host: {{ .Values.llmApi.host }}
+  exportTo: ["*"]
+  trafficPolicy:
+    tls:
+      mode: SIMPLE
+      sni: {{ .Values.llmApi.host }}

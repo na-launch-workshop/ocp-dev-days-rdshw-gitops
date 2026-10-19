@@ -1,0 +1,9 @@
+dependencies:
+- name: kuadrant-operator
+  repository: file://kuadrant-operator
+  version: 0.1.0
+- name: connectivity-link-instance
+  repository: file://connectivity-link-instance
+  version: 0.1.0
+digest: sha256:99dcbadb396e3245a1d4a53edb8d2e8267d7b86a46464659d2237c78aaf4d0a5
+generated: "2026-08-13T11:40:06.505173+01:00"

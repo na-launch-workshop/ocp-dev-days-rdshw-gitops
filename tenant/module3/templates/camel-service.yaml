@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: r2k
+  namespace: {{ include "user-workload.namespace" . }}
+  labels:
+    app: r2k
+    {{- include "user-workload.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: r2k
+  ports:
+    - port: 80
+      targetPort: 8080
+      protocol: TCP

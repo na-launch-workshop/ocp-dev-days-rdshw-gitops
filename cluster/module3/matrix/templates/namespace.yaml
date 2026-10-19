@@ -1,0 +1,10 @@
+{{- if .Values.namespace }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace }}
+  annotations:
+    {{- include "matrix.namespace-syncwave" . | nindent 4 }}
+  labels:
+    argocd.argoproj.io/managed-by: openshift-gitops
+{{- end }}

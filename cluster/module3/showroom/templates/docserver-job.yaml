@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: docserver-deploy
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.workloads-syncwave" . | nindent 4 }}
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: docserver
+      restartPolicy: Never
+      volumes:
+        - name: route
+          configMap:
+            name: docserver-route
+      containers:
+        - name: jbang
+          image: {{ .Values.docserver.image }}
+          volumeMounts:
+            - name: route
+              mountPath: /app
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 500m
+            limits:
+              memory: 2Gi
+              cpu: "1"
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              source ~/.bashrc
+
+              echo "=== Deploying docserver ==="
+              cp /app/docs.camel.yaml /tmp/docs.camel.yaml
+              cd /tmp
+
+              camel kubernetes run docs.camel.yaml \
+                --name docserver \
+                --namespace={{ .Values.namespace }} \
+                --cluster-type=openshift \
+                --trait route.enabled=true \
+                --trait route.tls-termination=edge \
+                --service-account=docserver \
+                --env TENANT_NS_PREFIX={{ .Values.docserver.tenant.namespacePrefix }} \
+                --env TENANT_NS_SUFFIX={{ .Values.docserver.tenant.namespaceSuffix }}
+
+              echo "=== Done ==="

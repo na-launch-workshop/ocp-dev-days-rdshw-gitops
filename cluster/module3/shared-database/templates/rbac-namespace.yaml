@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: shared-db-viewer
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "shared-database.rbac-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "configmaps", "persistentvolumeclaims", "events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["skupper.io"]
+    resources: ["sites", "connectors", "listeners", "links"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["skupper.io"]
+    resources: ["accesstokens"]
+    verbs: ["list"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["clusterserviceversions"]
+    verbs: ["get", "list", "watch"]

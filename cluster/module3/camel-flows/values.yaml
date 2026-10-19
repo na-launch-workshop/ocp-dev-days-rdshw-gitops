@@ -1,0 +1,4 @@
+namespace: camel-flows
+
+build:
+  image: image-registry.openshift-image-registry.svc:5000/workspace-images/app-connect-ai:latest

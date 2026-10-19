@@ -1,7 +1,0 @@
-subscription:
-  channel: stable
-  installPlanApproval: Automatic
-  name: cluster-observability-operator
-  source: redhat-operators
-  sourceNamespace: openshift-marketplace
-  namespace: openshift-operators

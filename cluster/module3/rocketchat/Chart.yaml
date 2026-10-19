@@ -1,0 +1,5 @@
+apiVersion: v2
+name: rocketchat
+description: A Helm chart for deploying Rocket Chat and MongoDB
+type: application
+version: 0.1.0

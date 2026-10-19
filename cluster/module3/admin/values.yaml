@@ -1,0 +1,14 @@
+namespace: admin-m3
+
+kuadrantNamespace: kuadrant-system
+
+vault:
+  namespace: vault
+  pod: vault-0
+
+s3:
+  noobaaNamespace: openshift-storage
+  noobaaSecret: noobaa-admin
+
+waitForES:
+  enabled: false

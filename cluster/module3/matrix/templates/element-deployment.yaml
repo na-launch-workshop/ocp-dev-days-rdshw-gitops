@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: element
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "matrix.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: element
+  template:
+    metadata:
+      labels:
+        app: element
+    spec:
+      containers:
+      - name: element
+        image: {{ .Values.element.image }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.json
+          subPath: config.json
+        ports:
+        - containerPort: 8080
+          name: element
+          protocol: TCP
+        env:
+        - name: ELEMENT_WEB_PORT
+          value: "8080"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: element
+          initialDelaySeconds: 2
+          periodSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: element
+          initialDelaySeconds: 10
+          periodSeconds: 10
+      volumes:
+      - name: config-volume
+        configMap:
+          name: element-config

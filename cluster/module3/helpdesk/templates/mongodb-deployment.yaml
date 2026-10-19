@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: helpdesk-db
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: helpdesk-db
+  annotations:
+    {{- include "helpdesk.database-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: helpdesk-db
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: helpdesk-db
+    spec:
+      initContainers:
+      - name: init-permissions
+        image: {{ .Values.mongodb.image }}
+        command: ["bash", "-c", "mkdir -p /var/lib/mongodb/data/db && chmod 777 /var/lib/mongodb/data/db"]
+        securityContext:
+          runAsUser: 0
+        volumeMounts:
+        - name: helpdesk-db-data
+          mountPath: /var/lib/mongodb/data
+      containers:
+      - name: mongodb
+        image: {{ .Values.mongodb.image }}
+        resources:
+          requests:
+            memory: {{ .Values.mongodb.resources.requests.memory | quote }}
+            cpu: {{ .Values.mongodb.resources.requests.cpu | quote }}
+          limits:
+            memory: {{ .Values.mongodb.resources.limits.memory | quote }}
+            cpu: {{ .Values.mongodb.resources.limits.cpu | quote }}
+        ports:
+        - containerPort: 27017
+          protocol: TCP
+        env:
+        - name: MONGODB_ADMIN_PASSWORD
+          value: {{ .Values.mongodb.adminPassword | quote }}
+        - name: MONGODB_USER
+          value: {{ .Values.mongodb.user }}
+        - name: MONGODB_PASSWORD
+          value: {{ .Values.mongodb.password | quote }}
+        - name: MONGODB_DATABASE
+          value: {{ .Values.mongodb.database }}
+        readinessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -i
+            - -c
+            - mongo 127.0.0.1:27017/$MONGODB_DATABASE -u $MONGODB_USER -p $MONGODB_PASSWORD --eval="quit()"
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - /bin/sh
+            - -i
+            - -c
+            - mongo 127.0.0.1:27017/$MONGODB_DATABASE -u $MONGODB_USER -p $MONGODB_PASSWORD --eval="quit()"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: helpdesk-db-data
+          mountPath: /var/lib/mongodb/data
+          subPath: db
+      volumes:
+      - name: helpdesk-db-data
+        persistentVolumeClaim:
+          claimName: helpdesk-db

@@ -1,0 +1,199 @@
+- route:
+    id: cors
+    from:
+      uri: direct:cors
+      steps:
+        - setHeader:
+            name: Access-Control-Allow-Origin
+            simple:
+              expression: "*"
+        - setHeader:
+            name: Access-Control-Allow-Headers
+            simple:
+              expression: "user"
+        - setHeader:
+            name: Access-Control-Allow-Methods
+            simple:
+              expression: "GET, OPTIONS"
+        - filter:
+            simple: "${header.CamelHttpMethod} == 'OPTIONS'"
+            steps:
+              - setBody:
+                  constant: ""
+              - stop: {}
+
+- route:
+    id: status
+    from:
+      uri: platform-http
+      parameters:
+        path: /status
+      steps:
+        - to:
+            uri: direct:cors
+        - setBody:
+            simple:
+              expression: ok
+
+- route:
+    id: fetch-secret
+    description: Reusable direct route to fetch lab-credentials from a tenant namespace
+    from:
+      uri: direct:fetch-secret
+      steps:
+        - setHeader:
+            name: CamelKubernetesNamespaceName
+            simple:
+              expression: ${sysenv.TENANT_NS_PREFIX}${header.user}${sysenv.TENANT_NS_SUFFIX}
+        - setHeader:
+            name: CamelKubernetesSecretName
+            constant: lab-credentials
+        - to:
+            uri: kubernetes-secrets:default?operation=getSecret
+        - log:
+            message: "fetch-secret: namespace=${header.CamelKubernetesNamespaceName}, key=${header.CamelSecretKey}"
+        - filter:
+            simple: "${body} == null"
+            steps:
+              - setHeader:
+                  name: CamelHttpResponseCode
+                  constant: 404
+              - setBody:
+                  constant: "not found"
+              - stop: {}
+        - marshal:
+            json: {}
+        - setBody:
+            jq:
+              expression: '.data[header("CamelSecretKey")] | @base64d | fromjson'
+
+- route:
+    id: openshift
+    description: Get OpenShift password for a user
+    from:
+      uri: platform-http
+      parameters:
+        path: /credentials/openshift
+      steps:
+        - to:
+            uri: direct:cors
+        - setHeader:
+            name: CamelSecretKey
+            constant: openshift.json
+        - to:
+            uri: direct:fetch-secret
+        - setBody:
+            jq:
+              expression: '.password'
+
+- route:
+    id: im
+    description: Get IM password for a user
+    from:
+      uri: platform-http
+      parameters:
+        path: /credentials/im
+      steps:
+        - to:
+            uri: direct:cors
+        - setHeader:
+            name: CamelSecretKey
+            constant: openshift.json
+        - to:
+            uri: direct:fetch-secret
+        - setBody:
+            jq:
+              expression: '.password'
+
+- route:
+    id: room-id
+    description: Get Room ID from username
+    from:
+      uri: platform-http
+      parameters:
+        path: /roomid
+      steps:
+        - to:
+            uri: direct:cors
+        - setBody:
+            simple:
+              expression: ${header.user}
+        - setBody:
+            simple:
+              expression: ${replace('user','room')}
+
+- route:
+    id: matrix
+    description: Get Matrix credentials for a user
+    from:
+      uri: platform-http
+      parameters:
+        path: /configuration/matrix
+      steps:
+        - to:
+            uri: direct:cors
+        - setHeader:
+            name: CamelSecretKey
+            constant: matrix.json
+        - to:
+            uri: direct:fetch-secret
+
+- route:
+    id: rocketchat
+    description: Get RocketChat credentials for a user
+    from:
+      uri: platform-http
+      parameters:
+        path: /configuration/rocketchat
+      steps:
+        - to:
+            uri: direct:cors
+        - setHeader:
+            name: CamelSecretKey
+            constant: rocketchat.json
+        - to:
+            uri: direct:fetch-secret
+
+- route:
+    id: config-s3
+    description: Get S3 credentials for a user
+    from:
+      uri: platform-http
+      parameters:
+        path: /configuration/s3/{param1}/{param2}
+      steps:
+        - to:
+            uri: direct:cors
+        - setHeader:
+            name: CamelSecretKey
+            constant: s3.json
+        - to:
+            uri: direct:fetch-secret
+        - setVariable:
+            name: accessKey
+            jq: .accessKey
+        - setVariable:
+            name: secretKey
+            jq: .secretKey
+        - setBody:
+            simple: "{}"
+        - filter:
+            simple: ${header.param1} == 'access'
+            steps:
+              - setBody:
+                  simple: ${variable.accessKey}
+              - filter:
+                  simple: ${header.param2} == 'secret'
+                  steps:
+                    - setBody:
+                        simple: ${body},${variable.secretKey}
+        - filter:
+            simple: ${header.param1} == 'secret'
+            steps:
+              - setBody:
+                  simple: ${variable.secretKey}
+              - filter:
+                  simple: ${header.param2} == 'access'
+                  steps:
+                    - setBody:
+                        simple: ${body},${variable.accessKey}

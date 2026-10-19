@@ -1,0 +1,98 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-s3-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  playbook.yaml: |
+    ---
+    - name: S3 provisioning
+      hosts: localhost
+      gather_facts: false
+      vars:
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+        bucket_name: {{ .Values.tenant.username | quote }}
+        pdf_url: {{ .Values.s3.pdfUrl | quote }}
+        pdf_file: {{ .Values.s3.pdfFile | quote }}
+      tasks:
+        - name: Read S3 credentials from Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: vault kv get -format=json kv/secrets/s3/noobaa
+          register: r_vault_s3
+          failed_when: r_vault_s3.rc != 0
+
+        - name: Parse S3 credentials
+          ansible.builtin.set_fact:
+            s3_access_key: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.accessKey {{ "}}" }}"
+            s3_secret_key: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.secretKey {{ "}}" }}"
+            s3_endpoint: "{{ "{{" }} (r_vault_s3.stdout | from_json).data.data.endpoint {{ "}}" }}"
+
+        - name: Create S3 bucket
+          amazon.aws.s3_bucket:
+            name: "{{ "{{" }} bucket_name {{ "}}" }}"
+            state: present
+            aws_access_key: "{{ "{{" }} s3_access_key {{ "}}" }}"
+            aws_secret_key: "{{ "{{" }} s3_secret_key {{ "}}" }}"
+            endpoint_url: "{{ "{{" }} s3_endpoint {{ "}}" }}"
+            validate_certs: false
+
+        - name: Download seed PDF
+          ansible.builtin.get_url:
+            url: "{{ "{{" }} pdf_url {{ "}}" }}"
+            dest: "/tmp/{{ "{{" }} pdf_file {{ "}}" }}"
+            mode: '0644'
+
+        - name: Upload PDF to S3
+          amazon.aws.s3_object:
+            bucket: "{{ "{{" }} bucket_name {{ "}}" }}"
+            object: "{{ "{{" }} pdf_file {{ "}}" }}"
+            src: "/tmp/{{ "{{" }} pdf_file {{ "}}" }}"
+            mode: put
+            aws_access_key: "{{ "{{" }} s3_access_key {{ "}}" }}"
+            aws_secret_key: "{{ "{{" }} s3_secret_key {{ "}}" }}"
+            endpoint_url: "{{ "{{" }} s3_endpoint {{ "}}" }}"
+            validate_certs: false
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: s3-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: s3-provision
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-s3-provision-{{ .Values.tenant.username }}

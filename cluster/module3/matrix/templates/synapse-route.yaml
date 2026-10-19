@@ -1,0 +1,18 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: synapse
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: synapse
+  annotations:
+    {{- include "matrix.workloads-syncwave" . | nindent 4 }}
+spec:
+  to:
+    kind: Service
+    name: synapse
+  port:
+    targetPort: http
+  wildcardPolicy: None
+  tls:
+    termination: edge

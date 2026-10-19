@@ -3,7 +3,7 @@ kind: Job
 metadata:
   name: pipelines-installplan-approve
   annotations:
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/sync-wave: "1"
 spec:
   # ttlSecondsAfterFinished: 1200
   backoffLimit: 5

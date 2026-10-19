@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: my-cluster-kafka
+  namespace: {{ include "user-workload.namespace" . }}
+  labels:
+    app: my-cluster-kafka
+    app.kubernetes.io/part-of: {{ .Values.kafka.topologyMarker.partOf }}
+    app.openshift.io/runtime: {{ .Values.kafka.topologyMarker.runtime }}
+    {{- include "user-workload.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: my-cluster-kafka
+  template:
+    metadata:
+      labels:
+        app: my-cluster-kafka
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kafka
+          image: registry.redhat.io/ubi8/ubi-micro:latest
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "This is a dummy pod used as a topology marker. The real Kafka cluster runs as KRaft pods (my-cluster-dual-role-0)."; sleep infinity
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

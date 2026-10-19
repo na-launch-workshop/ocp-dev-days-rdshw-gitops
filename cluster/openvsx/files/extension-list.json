@@ -73,6 +73,30 @@
     },
     {
       "id": "ms-python.debugpy"
+    },
+    {
+      "id": "redhat.vscode-kaoto"
+    },
+    {
+      "id": "vscode.git"
+    },
+    {
+      "id": "redhat.mta-core"
+    },
+    {
+      "id": "redhat.mta-java"
+    },
+    {
+      "id": "redhat.mta-csharp"
+    },
+    {
+      "id": "redhat.mta-go"
+    },
+    {
+      "id": "redhat.mta-javascript"
+    },
+    {
+      "id": "redhat.mta-vscode-extension"
     }
   ]
 }

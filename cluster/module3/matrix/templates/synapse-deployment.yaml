@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: synapse
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "matrix.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: synapse
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: synapse
+    spec:
+      containers:
+      - name: synapse
+        image: {{ .Values.synapse.image }}
+        command: ["/bin/sh", "-c", "/start.py generate && /start.py"]
+        resources:
+          requests:
+            memory: {{ .Values.synapse.resources.requests.memory | quote }}
+            cpu: {{ .Values.synapse.resources.requests.cpu | quote }}
+          limits:
+            memory: {{ .Values.synapse.resources.limits.memory | quote }}
+            cpu: {{ .Values.synapse.resources.limits.cpu | quote }}
+        env:
+        - name: SYNAPSE_SERVER_NAME
+          value: {{ .Values.synapse.serverName | quote }}
+        - name: SYNAPSE_REPORT_STATS
+          value: "no"
+        - name: SYNAPSE_CONFIG_PATH
+          value: "/data/config/homeserver.yaml"
+        - name: PUBLIC_BASE_URL
+          value: "https://synapse-{{ .Values.namespace }}.{{ .Values.cluster.subdomain }}"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+          subPath: synapse
+        - name: config
+          mountPath: /data/config
+        ports:
+        - containerPort: 8008
+      volumes:
+      - name: data
+        persistentVolumeClaim:
+          claimName: synapse-pv-claim
+      - name: config
+        configMap:
+          name: config

@@ -1,0 +1,14 @@
+namespace: openshift-operators
+
+subscription:
+  channel: stable-2.1
+  installPlanApproval: Manual
+  startingCSV: skupper-operator.v2.1.4-rh-3
+  name: skupper-operator
+  source: redhat-operators
+  sourceNamespace: openshift-marketplace
+
+argocd:
+  syncwave:
+    enabled: true
+    subscription: "0"

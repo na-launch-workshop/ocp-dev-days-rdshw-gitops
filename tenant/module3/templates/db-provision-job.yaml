@@ -1,0 +1,163 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-provision-{{ .Values.tenant.username }}
+  namespace: {{ .Values.admin.namespace }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-provision
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          env:
+            - name: PGPASSWORD
+              value: {{ .Values.sharedDatabase.adminPassword }}
+            - name: USER_PASS
+              value: {{ .Values.tenant.password | quote }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              DB_HOST="postgres.{{ .Values.sharedDatabase.namespace }}.svc.cluster.local"
+              DB_NAME="{{ .Values.sharedDatabase.database }}"
+              DB_ADMIN="{{ .Values.sharedDatabase.adminUser }}"
+              USERNAME="{{ .Values.tenant.username }}"
+
+              echo "Provisioning database schema for ${USERNAME}..."
+
+              psql -h "$DB_HOST" -U "$DB_ADMIN" -d "$DB_NAME" <<EOSQL
+              DO \$\$
+              BEGIN
+                IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${USERNAME}') THEN
+                  CREATE ROLE ${USERNAME} LOGIN PASSWORD '${USER_PASS}';
+                  GRANT ${USERNAME} TO ${DB_ADMIN};
+                END IF;
+              END
+              \$\$;
+
+              CREATE SCHEMA IF NOT EXISTS ${USERNAME} AUTHORIZATION ${USERNAME};
+
+              CREATE TABLE IF NOT EXISTS ${USERNAME}.invoices (
+                  id CHARACTER VARYING NOT NULL,
+                  data TEXT NOT NULL,
+                  version INTEGER NOT NULL DEFAULT 0,
+                  PRIMARY KEY (id)
+              );
+
+              CREATE OR REPLACE FUNCTION ${USERNAME}.increment_version()
+              RETURNS TRIGGER AS \$\$
+              BEGIN
+                  NEW.version := OLD.version + 1;
+                  RETURN NEW;
+              END;
+              \$\$ LANGUAGE plpgsql;
+
+              DROP TRIGGER IF EXISTS invoices_version_trigger ON ${USERNAME}.invoices;
+              CREATE TRIGGER invoices_version_trigger
+                  BEFORE UPDATE ON ${USERNAME}.invoices
+                  FOR EACH ROW
+                  EXECUTE FUNCTION ${USERNAME}.increment_version();
+
+              ALTER TABLE ${USERNAME}.invoices OWNER TO ${USERNAME};
+              ALTER FUNCTION ${USERNAME}.increment_version() OWNER TO ${USERNAME};
+
+              CREATE OR REPLACE VIEW ${USERNAME}.policies AS SELECT * FROM ${USERNAME}.invoices;
+              ALTER VIEW ${USERNAME}.policies OWNER TO ${USERNAME};
+              GRANT SELECT ON ${USERNAME}.policies TO ${USERNAME};
+
+              INSERT INTO ${USERNAME}.invoices (id, data) VALUES
+              ('61356291', '<?xml version="1.0" encoding="UTF-8"?>
+              <PolicyDocument xmlns:fn="http://www.w3.org/2005/xpath-functions"
+                              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                 <PolicyNumber>61356291</PolicyNumber>
+                 <DateOfIssue>20250609</DateOfIssue>
+                 <Insurer>
+                    <Name>Parasol Insurance</Name>
+                    <Address>
+                       <Street>One Parasol Plaza</Street>
+                       <City>Atlanta</City>
+                       <State>GA</State>
+                       <PostalCode>30313</PostalCode>
+                    </Address>
+                    <TaxId>939988477</TaxId>
+                    <IBAN>GB50ACIE59715038217063</IBAN>
+                 </Insurer>
+                 <Policyholder>
+                    <Name>Alex Morgan</Name>
+                    <Address>
+                       <Street>742 Maple Avenue</Street>
+                       <City>Austin</City>
+                       <State>TX</State>
+                       <PostalCode>78701</PostalCode>
+                    </Address>
+                    <TaxId>949849105</TaxId>
+                 </Policyholder>
+                 <Items>
+                    <Item>
+                       <Number>1</Number>
+                       <ProductID/>
+                       <ProductID>LIAB-STD01</ProductID>
+                       <Description>Personal Liability – Standard Plan | Bodily injury &amp; property damage | Limit: $100,000/occurrence</Description>
+                       <Quantity>1</Quantity>
+                       <UnitOfMeasure>mo.</UnitOfMeasure>
+                       <NetPrice>28.99</NetPrice>
+                       <NetWorth>28.99</NetWorth>
+                       <VATPercentage>10</VATPercentage>
+                       <GrossWorth>31.89</GrossWorth>
+                    </Item>
+                    <Item>
+                       <Number>2</Number>
+                       <ProductID/>
+                       <ProductID>PROP-DAM01</ProductID>
+                       <Description>Property Damage | Third-party property damage caused by insured | Limit: $50,000 | Deductible: $500</Description>
+                       <Quantity>1</Quantity>
+                       <UnitOfMeasure>mo.</UnitOfMeasure>
+                       <NetPrice>34.5</NetPrice>
+                       <NetWorth>34.5</NetWorth>
+                       <VATPercentage>10</VATPercentage>
+                       <GrossWorth>37.95</GrossWorth>
+                    </Item>
+                    <Item>
+                       <Number>3</Number>
+                       <ProductID/>
+                       <ProductID>MED-PAY01</ProductID>
+                       <Description>Medical Payments | No-fault medical expenses for injured parties | Limit: $5,000 per person</Description>
+                       <Quantity>1</Quantity>
+                       <UnitOfMeasure>mo.</UnitOfMeasure>
+                       <NetPrice>18</NetPrice>
+                       <NetWorth>18</NetWorth>
+                       <VATPercentage>10</VATPercentage>
+                       <GrossWorth>19.8</GrossWorth>
+                    </Item>
+                    <Item>
+                       <Number>4</Number>
+                       <ProductID/>
+                       <ProductID>ROAD-AST01</ProductID>
+                       <Description>Roadside Assistance | 24/7 towing, jump-start &amp; lockout service | Up to 50 miles per incident</Description>
+                       <Quantity>1</Quantity>
+                       <UnitOfMeasure>mo.</UnitOfMeasure>
+                       <NetPrice>12</NetPrice>
+                       <NetWorth>12</NetWorth>
+                       <VATPercentage>10</VATPercentage>
+                       <GrossWorth>13.2</GrossWorth>
+                    </Item>
+                 </Items>
+                 <Summary>
+                    <VATPercentage>10</VATPercentage>
+                    <NetWorth>93.49</NetWorth>
+                    <VATAmount>9.35</VATAmount>
+                    <GrossWorth>102.84</GrossWorth>
+                 </Summary>
+              </PolicyDocument>')
+              ON CONFLICT (id) DO NOTHING;
+              EOSQL
+
+              echo "Database provisioning complete for ${USERNAME}."

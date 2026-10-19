@@ -1,0 +1,57 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: docserver
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: docserver-secret-reader-m3
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: docserver-secret-reader-m3
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: docserver-secret-reader-m3
+subjects:
+  - kind: ServiceAccount
+    name: docserver
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: docserver-edit
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - kind: ServiceAccount
+    name: docserver
+    namespace: {{ .Values.namespace }}

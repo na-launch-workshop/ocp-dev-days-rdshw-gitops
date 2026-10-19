@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: db-cleanup-{{ .Values.tenant.username }}
+  namespace: {{ .Values.admin.namespace }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: db-cleanup
+          image: registry.redhat.io/rhel9/postgresql-16:latest
+          env:
+            - name: PGPASSWORD
+              value: {{ .Values.sharedDatabase.adminPassword }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              DB_HOST="postgres.{{ .Values.sharedDatabase.namespace }}.svc.cluster.local"
+              DB_NAME="{{ .Values.sharedDatabase.database }}"
+              DB_ADMIN="{{ .Values.sharedDatabase.adminUser }}"
+              USERNAME="{{ .Values.tenant.username }}"
+
+              echo "Cleaning up database schema for ${USERNAME}..."
+
+              psql -h "$DB_HOST" -U "$DB_ADMIN" -d "$DB_NAME" -c "DROP SCHEMA IF EXISTS ${USERNAME} CASCADE;" || true
+              psql -h "$DB_HOST" -U "$DB_ADMIN" -d "$DB_NAME" -c "REVOKE ${USERNAME} FROM ${DB_ADMIN};" 2>/dev/null || true
+              psql -h "$DB_HOST" -U "$DB_ADMIN" -d "$DB_NAME" -c "DROP ROLE IF EXISTS ${USERNAME};" || true
+
+              echo "Database cleanup complete for ${USERNAME}."

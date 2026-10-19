@@ -1,0 +1,263 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-rc-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  playbook.yaml: |
+    ---
+    - name: RocketChat provisioning + Vault write
+      hosts: localhost
+      gather_facts: false
+      vars:
+        rc_url: "http://rocketchat.{{ .Values.rocketchat.namespace }}.svc.cluster.local:3000"
+        admin_user: {{ .Values.rocketchat.admin.username | quote }}
+        admin_pass: {{ .Values.rocketchat.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        user_pass: "{{ "{{" }} lookup('env', 'USER_PASSWORD') {{ "}}" }}"
+        room_name: {{ include "user-workload.roomname" . | trim | quote }}
+        ai_channel: {{ include "user-workload.ai-support-channel" . | trim | quote }}
+        webhook_name: "{{ include "user-workload.roomname" . | trim }} webhook"
+        ai_webhook_name: "{{ include "user-workload.ai-support-channel" . | trim }} webhook"
+        r2k_url: "http://r2k.{{ include "user-workload.namespace" . }}.svc:80/webhook"
+        tenant_namespace: {{ include "user-workload.namespace" . | quote }}
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+      tasks:
+        - name: Wait for RocketChat to be ready
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/info"
+          register: r_rc
+          retries: 30
+          delay: 10
+          until: r_rc.status == 200
+
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/login"
+            method: POST
+            body_format: json
+            body:
+              user: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+
+        - name: Set admin credentials
+          ansible.builtin.set_fact:
+            admin_id: "{{ "{{" }} r_admin_login.json.data.userId {{ "}}" }}"
+            admin_token: "{{ "{{" }} r_admin_login.json.data.authToken {{ "}}" }}"
+
+        - name: Create user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/users.create"
+            method: POST
+            body_format: json
+            body:
+              name: "{{ "{{" }} username {{ "}}" }}"
+              email: "{{ "{{" }} username {{ "}}" }}@user.tld"
+              username: "{{ "{{" }} username {{ "}}" }}"
+              password: "{{ "{{" }} user_pass {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 400]
+
+        - name: Create private channel
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/groups.create"
+            method: POST
+            body_format: json
+            body:
+              name: "{{ "{{" }} room_name {{ "}}" }}"
+              members:
+                - "{{ "{{" }} username {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 400]
+
+        - name: Get existing integrations
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.list?count=100"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          register: r_integrations
+
+        - name: Check if room webhook exists
+          ansible.builtin.set_fact:
+            room_webhook_exists: "{{ "{{" }} r_integrations.json.integrations | selectattr('name', 'equalto', webhook_name) | list | length > 0 {{ "}}" }}"
+
+        - name: Create outgoing webhook for room
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.create"
+            method: POST
+            body_format: json
+            body:
+              type: webhook-outgoing
+              name: "{{ "{{" }} webhook_name {{ "}}" }}"
+              event: sendMessage
+              enabled: true
+              channel: "#{{ "{{" }} room_name {{ "}}" }}"
+              username: "{{ "{{" }} username {{ "}}" }}"
+              urls:
+                - "{{ "{{" }} r2k_url {{ "}}" }}"
+              scriptEnabled: true
+              script: "class Script {process_outgoing_response({ request, response }){return false;}}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          when: not room_webhook_exists | bool
+
+        - name: Create AI Bot user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/users.create"
+            method: POST
+            body_format: json
+            body:
+              name: "AI Bot"
+              email: "ai-bot@bot.tld"
+              username: "ai-bot"
+              password: "ai-bot"
+              roles:
+                - bot
+              verified: true
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 400]
+
+        - name: Create AI Support channel
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/groups.create"
+            method: POST
+            body_format: json
+            body:
+              name: "{{ "{{" }} ai_channel {{ "}}" }}"
+              members:
+                - "{{ "{{" }} username {{ "}}" }}"
+                - "ai-bot"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 400]
+
+        - name: Wait for workspace service
+          kubernetes.core.k8s_info:
+            kind: Service
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+          register: r_services
+          retries: 30
+          delay: 5
+          until: r_services.resources | selectattr('metadata.name', 'match', '^workspace') | list | length > 0
+          failed_when: false
+
+        - name: Set workspace service name
+          ansible.builtin.set_fact:
+            workspace_svc: "{{ "{{" }} (r_services.resources | selectattr('metadata.name', 'match', '^workspace') | first).metadata.name {{ "}}" }}"
+          when: r_services.resources | selectattr('metadata.name', 'match', '^workspace') | list | length > 0
+
+        - name: Create AI Support webhook
+          when: workspace_svc is defined
+          block:
+            - name: Set workspace URL
+              ansible.builtin.set_fact:
+                workspace_url: "http://{{ "{{" }} workspace_svc {{ "}}" }}.{{ "{{" }} tenant_namespace {{ "}}" }}.svc.cluster.local:8080/ai-support"
+
+            - name: Check if AI support webhook exists
+              ansible.builtin.set_fact:
+                ai_webhook_exists: "{{ "{{" }} r_integrations.json.integrations | selectattr('name', 'equalto', ai_webhook_name) | list | length > 0 {{ "}}" }}"
+
+            - name: Create AI Support outgoing webhook
+              ansible.builtin.uri:
+                url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.create"
+                method: POST
+                body_format: json
+                body:
+                  type: webhook-outgoing
+                  name: "{{ "{{" }} ai_webhook_name {{ "}}" }}"
+                  event: sendMessage
+                  enabled: true
+                  channel: "#{{ "{{" }} ai_channel {{ "}}" }}"
+                  username: "ai-bot"
+                  urls:
+                    - "{{ "{{" }} workspace_url {{ "}}" }}"
+                  scriptEnabled: true
+                  script: "class Script {prepare_outgoing_request({request}){if(request.data.bot){return;}return request;}}"
+                headers:
+                  X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+                  X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+              when: not ai_webhook_exists | bool
+
+        - name: Login as user to get credentials
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/login"
+            method: POST
+            body_format: json
+            body:
+              user: "{{ "{{" }} username {{ "}}" }}"
+              password: "{{ "{{" }} user_pass {{ "}}" }}"
+          register: r_user_login
+
+        - name: Set user credentials
+          ansible.builtin.set_fact:
+            rc_user_id: "{{ "{{" }} r_user_login.json.data.userId {{ "}}" }}"
+            rc_user_token: "{{ "{{" }} r_user_login.json.data.authToken {{ "}}" }}"
+
+        - name: Write RocketChat credentials to Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: >-
+              vault kv put kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/rocketchat
+              userId={{ "{{" }} rc_user_id {{ "}}" }}
+              token={{ "{{" }} rc_user_token {{ "}}" }}
+              channel={{ "{{" }} room_name {{ "}}" }}
+          register: r_vault_write
+          failed_when: r_vault_write.rc != 0
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m3-rc-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rc-provision
+          command:
+            - /bin/bash
+            - '-c'
+            - |
+              set -x
+              ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: USER_PASSWORD
+              value: {{ .Values.tenant.password | quote }}
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-rc-provision-{{ .Values.tenant.username }}

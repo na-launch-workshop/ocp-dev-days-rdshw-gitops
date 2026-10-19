@@ -1,0 +1,39 @@
+- route:
+    id: route-3093
+    description: Kafka to RocketChat
+    from:
+      id: from-2541
+      description: Kafka
+      uri: kafka
+      parameters:
+        brokers: my-cluster-kafka-bootstrap:9092
+        topic: myroom
+      steps:
+        - filter:
+            id: filter-1773
+            steps:
+              - stop:
+                  id: stop-2721
+            jq:
+              expression: .source == "rocketchat"
+              source: common
+        - step:
+            id: kaoto-datamapper-a02d6e81
+            steps:
+              - to:
+                  id: kaoto-datamapper-xslt-7236
+                  uri: xslt-saxon:kaoto-datamapper-a02d6e81.xsl
+                  parameters:
+                    failOnNullBody: false
+        - log:
+            message: ${body}
+        - to:
+            description: RocketChat
+            uri: kamelet
+            parameters:
+              templateId: rocketchat-sink
+              token: "{{env:ROCKETCHAT_TOKEN}}"
+              userid: "{{env:ROCKETCHAT_USERID}}"
+              rocketchatUrl: "{{env:ROCKETCHAT_URL}}"
+            disabled: false
+      variableReceive: common

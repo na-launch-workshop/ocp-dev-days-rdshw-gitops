@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: mongodb
+  annotations:
+    {{- include "rocketchat.database-syncwave" . | nindent 4 }}
+spec:
+  publishNotReadyAddresses: true
+  ports:
+  - name: mongo
+    port: 27017
+    protocol: TCP
+    targetPort: 27017
+  selector:
+    name: mongodb
+  type: ClusterIP

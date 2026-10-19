@@ -1,0 +1,48 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: dls-mta-config
+  namespace: {{ include "devspaces-instance.namespace" . }}
+  annotations:
+    {{- include "devspaces-instance.argocd-syncwave" . | nindent 4 }}
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    name: vault-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: dls-mta-config
+    creationPolicy: Owner
+    template:
+      engineVersion: v2
+      metadata:
+        labels:
+          app.kubernetes.io/part-of: che.eclipse.org
+          app.kubernetes.io/component: workspaces-config
+        annotations:
+          controller.devfile.io/mount-as: subpath
+          controller.devfile.io/mount-path: /globalconfig
+      data:
+        provider-settings.yaml: |
+          ---
+          environment:
+            ALWAYS_APPLIED_KEY: "envvar to be set regardless of which model is active"
+          models:
+            OpenShift: &active
+              environment:
+                OPENAI_API_KEY: "{{ "{{ .api_key }}" }}"
+              provider: ChatOpenAI
+              args:
+                model: "{{ .Values.aiAssistantModel }}"
+                configuration:
+                  baseURL: "{{ "{{ .base_url }}" }}"
+          active: *active
+  data:
+    - secretKey: api_key
+      remoteRef:
+        key: secrets/litellm/credentials
+        property: api_key
+    - secretKey: base_url
+      remoteRef:
+        key: secrets/litellm/credentials
+        property: base_url

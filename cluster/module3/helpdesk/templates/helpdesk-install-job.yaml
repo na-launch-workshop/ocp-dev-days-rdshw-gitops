@@ -1,0 +1,136 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: helpdesk-install
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: Never
+      serviceAccountName: helpdesk-admin
+      containers:
+      - name: install
+        image: registry.redhat.io/openshift4/ose-tools-rhel9:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          NS="{{ .Values.namespace }}"
+          HD_URL="http://helpdesk.${NS}.svc.cluster.local:8118"
+          HD_EXT_URL="https://helpdesk-${NS}.{{ .Values.cluster.subdomain }}"
+          K8S_API="https://kubernetes.default.svc"
+          TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+          CA_CERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+          echo "=== Step 1: Wait for Trudesk ==="
+          until curl -sf "${HD_URL}" > /dev/null 2>&1; do
+            echo "Trudesk not ready, retrying in 10s..."
+            sleep 10
+          done
+          echo "Trudesk is ready."
+
+          echo "=== Step 2: Run install ==="
+          INSTALL_OUTPUT=$(curl -s -w "\n%{http_code}" -X POST "${HD_EXT_URL}/install" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "mongo[host]=helpdesk-db" \
+            -d "mongo[port]=27017" \
+            -d "mongo[username]={{ .Values.mongodb.user }}" \
+            -d "mongo[password]={{ .Values.mongodb.password }}" \
+            -d "mongo[database]={{ .Values.mongodb.database }}" \
+            -d "account[username]={{ .Values.helpdesk_admin.username }}" \
+            -d "account[fullname]=Admin" \
+            -d "account[password]={{ .Values.helpdesk_admin.password }}" \
+            -d "account[cpassword]={{ .Values.helpdesk_admin.password }}" \
+            -d "account[email]={{ .Values.helpdesk_admin.email }}" \
+            -d "elastic[enable]=false" \
+            -k)
+          INSTALL_CODE=$(echo "$INSTALL_OUTPUT" | tail -1)
+          echo "Install response code: $INSTALL_CODE"
+
+          if [ "$INSTALL_CODE" = "200" ]; then
+            echo "Fresh install completed. Restarting Trudesk to exit install mode..."
+
+            TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || date +%s)
+            curl -s -X PATCH "${K8S_API}/apis/apps/v1/namespaces/${NS}/deployments/helpdesk" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -H "Content-Type: application/strategic-merge-patch+json" \
+              --cacert "${CA_CERT}" \
+              -d "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"restartedAt\":\"${TIMESTAMP}\"}}}}}"
+            echo ""
+            echo "Restart triggered. Waiting for new pod..."
+
+            sleep 15
+            until curl -sf "${HD_URL}" > /dev/null 2>&1; do
+              echo "Waiting for Trudesk restart..."
+              sleep 10
+            done
+            echo "Trudesk is back up after restart."
+          elif [ "$INSTALL_CODE" = "302" ] || [ "$INSTALL_CODE" = "404" ]; then
+            echo "Already installed (code $INSTALL_CODE). Skipping restart."
+          else
+            echo "Install returned unexpected code: $INSTALL_CODE"
+            exit 1
+          fi
+
+          echo "=== Step 3: Login ==="
+          LOGIN_OUTPUT=$(curl -s -w "\n%{http_code}" -X POST "${HD_URL}/api/v1/login" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "username": "{{ .Values.helpdesk_admin.username }}",
+              "password": "{{ .Values.helpdesk_admin.password }}"
+            }')
+          LOGIN_CODE=$(echo "$LOGIN_OUTPUT" | tail -1)
+          LOGIN_BODY=$(echo "$LOGIN_OUTPUT" | sed '$d')
+
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "Login failed ($LOGIN_CODE): $LOGIN_BODY"
+            exit 1
+          fi
+
+          ACCESS_TOKEN=$(echo "$LOGIN_BODY" | sed -n 's/.*"accessToken":"\([^"]*\)".*/\1/p')
+          echo "Logged in. Token obtained."
+
+          echo "=== Step 4: Apply branding ==="
+          BRAND_OUTPUT=$(curl -s -w "\n%{http_code}" -X PUT "${HD_URL}/api/v1/settings" \
+            -H "Content-Type: application/json" \
+            -H "accesstoken: ${ACCESS_TOKEN}" \
+            -d '[
+              {"name": "gen:sitetitle", "value": "{{ .Values.branding.siteTitle }}"},
+              {"name": "color:headerbg", "value": "{{ .Values.branding.colors.headerBg }}"},
+              {"name": "color:headerprimary", "value": "{{ .Values.branding.colors.headerPrimary }}"},
+              {"name": "color:primary", "value": "{{ .Values.branding.colors.primary }}"},
+              {"name": "color:secondary", "value": "{{ .Values.branding.colors.secondary }}"},
+              {"name": "color:tertiary", "value": "{{ .Values.branding.colors.tertiary }}"},
+              {"name": "color:quaternary", "value": "{{ .Values.branding.colors.quaternary }}"},
+              {"name": "gen:customlogo", "value": true},
+              {"name": "gen:customlogofilename", "value": "topLogo.svg"},
+              {"name": "gen:custompagelogo", "value": true},
+              {"name": "gen:custompagelogofilename", "value": "pageLogo.svg"},
+              {"name": "gen:customfavicon", "value": true},
+              {"name": "gen:customfaviconfilename", "value": "favicon.svg"},
+              {"name": "accountsPasswordComplexity:enable", "value": false}
+            ]')
+          BRAND_CODE=$(echo "$BRAND_OUTPUT" | tail -1)
+
+          if [ "$BRAND_CODE" = "200" ]; then
+            echo "Branding applied successfully."
+          else
+            echo "Warning: Branding returned code $BRAND_CODE"
+          fi
+
+          echo "=== Step 5: Rebuild CSS ==="
+          CSS_OUTPUT=$(curl -s -w "\n%{http_code}" -X GET "${HD_URL}/api/v1/settings/buildsass" \
+            -H "accesstoken: ${ACCESS_TOKEN}")
+          CSS_CODE=$(echo "$CSS_OUTPUT" | tail -1)
+
+          if [ "$CSS_CODE" = "200" ]; then
+            echo "CSS rebuild triggered."
+          else
+            echo "Warning: CSS rebuild returned code $CSS_CODE"
+          fi
+
+          echo "=== Helpdesk setup complete ==="

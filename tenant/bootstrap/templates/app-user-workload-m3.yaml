@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.tenant.username }}-workload-m3
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+    - pre-delete-finalizer.argocd.argoproj.io
+    - pre-delete-finalizer.argocd.argoproj.io/cleanup
+spec:
+  destination:
+    namespace: {{ .Values.argocd.namespace }}
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+    # Build job scales Camel deployments to 0 after creating images, students scale them back up and Argo should not revert
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+  project: default
+  source:
+    path: tenant/module3
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        tenant:
+          username: {{ .Values.tenant.username }}
+          # Kept separate. OpenShift identity may not be valid for application accounts
+          openshiftUser: {{ .Values.tenant.username }}
+          password: {{ .Values.tenant.password }}
+        cluster:
+          appsDomain: {{ .Values.cluster.subdomain }}
+        litellm:
+          url: {{ .Values.litellm.url }}
+          apiKey: {{ .Values.litellm.apiKey }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m0s
+      limit: 30
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true

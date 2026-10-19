@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kuadrant-wait
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kuadrant-wait-crd-check
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+rules:
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get"]
+  - apiGroups: ["operators.coreos.com"]
+    resources: ["subscriptions", "installplans"]
+    verbs: ["get", "list", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kuadrant-wait-crd-check
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kuadrant-wait-crd-check
+subjects:
+  - kind: ServiceAccount
+    name: kuadrant-wait
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kuadrant-wait-for-crd
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: kuadrant-wait
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: registry.redhat.io/openshift4/ose-cli:v4.15.0
+          command:
+            - /bin/bash
+            - -c
+            - |
+              NS="{{ .Values.namespace }}"
+
+              echo "Waiting for install plan..."
+              for i in $(seq 1 30); do
+                IP=$(oc get subscription {{ .Values.subscription.name }} -n ${NS} \
+                  -o jsonpath='{.status.installPlanRef.name}' 2>/dev/null)
+                if [ -n "${IP}" ]; then
+                  echo "Found install plan: ${IP}"
+                  break
+                fi
+                echo "Attempt ${i}/30 - no install plan yet"
+                sleep 10
+              done
+
+              if [ -z "${IP}" ]; then
+                echo "Timed out waiting for install plan"
+                exit 1
+              fi
+
+              echo "Approving install plan ${IP}..."
+              oc patch installplan ${IP} -n ${NS} --type merge \
+                -p '{"spec":{"approved":true}}'
+
+              echo "Waiting for kuadrants.kuadrant.io CRD..."
+              for i in $(seq 1 60); do
+                if oc get crd kuadrants.kuadrant.io &>/dev/null; then
+                  echo "CRD found after ${i} attempts"
+                  exit 0
+                fi
+                echo "Attempt ${i}/60 - CRD not yet available"
+                sleep 15
+              done
+              echo "Timed out waiting for CRD"
+              exit 1

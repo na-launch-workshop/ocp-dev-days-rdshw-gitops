@@ -1,0 +1,31 @@
+tenant:
+  username: ""
+  openshiftUser: ""
+  password: ""
+
+gitlab:
+  host: ""
+
+cluster:
+  appsDomain: ""
+
+devspaces:
+  namespace: openshift-devspaces
+
+devworkspace:
+  name: mta-lab
+  # If empty, clones the tenant's GitLab copy of parasol-insurance-eap
+  gitRepo: ""
+  gitBranch: main
+  projectName: parasol-insurance-eap
+  image: image-registry.openshift-image-registry.svc:5000/workspace-images/dls-mta:latest
+  memoryLimit: 6Gi
+  m2VolumeSize: 3Gi
+  prepWorkspace:
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    workspace: "0"

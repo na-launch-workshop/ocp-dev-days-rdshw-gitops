@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rocketchat
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rocketchat
+  annotations:
+    {{- include "rocketchat.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rocketchat
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: rocketchat
+        name: rocketchat
+    spec:
+      containers:
+      - name: rocketchat
+        image: {{ .Values.rocketchat.image }}
+        resources:
+          requests:
+            memory: {{ .Values.rocketchat.resources.requests.memory | quote }}
+            cpu: {{ .Values.rocketchat.resources.requests.cpu | quote }}
+          limits:
+            memory: {{ .Values.rocketchat.resources.limits.memory | quote }}
+            cpu: {{ .Values.rocketchat.resources.limits.cpu | quote }}
+        env:
+        - name: ROOT_URL
+          value: "https://rocketchat-{{ .Values.namespace }}.{{ .Values.cluster.subdomain }}"
+        - name: MONGO_URL
+          value: "mongodb://{{ .Values.mongodb.adminUser }}:{{ .Values.mongodb.adminPassword }}@mongodb:27017/rocketchat?authSource=admin"
+        - name: OVERWRITE_SETTING_Show_Setup_Wizard
+          value: completed
+        - name: OVERWRITE_SETTING_Use_DNS_Domain_Check
+          value: "false"
+        - name: ADMIN_USERNAME
+          value: {{ .Values.mongodb.adminUser }}
+        - name: ADMIN_EMAIL
+          value: admin@example.com
+        - name: ADMIN_PASS
+          value: {{ .Values.mongodb.adminPassword }}
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        readinessProbe:
+          httpGet:
+            path: /api/v1/info
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 1
+        livenessProbe:
+          httpGet:
+            path: /api/v1/info
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 1
+        volumeMounts:
+        - mountPath: /app/uploads
+          name: rocketchat-uploads
+      volumes:
+      - name: rocketchat-uploads
+        emptyDir: {}

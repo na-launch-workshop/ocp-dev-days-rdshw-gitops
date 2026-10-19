@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: filestash
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "filestash.labels" . | nindent 4 }}
+    {{- include "filestash.selectorLabels" . | nindent 4 }}
+  annotations:
+    {{- include "filestash.workloads-syncwave" . | nindent 4 }}
+spec:
+  ports:
+    - name: 8334-tcp
+      protocol: TCP
+      port: 8334
+      targetPort: 8334
+  type: ClusterIP
+  selector:
+    {{- include "filestash.selectorLabels" . | nindent 4 }}
+    deployment: filestash

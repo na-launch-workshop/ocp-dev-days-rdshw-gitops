@@ -1,0 +1,66 @@
+gitops:
+  repoURL: https://github.com/rhpds/ocp-dev-days-rdshw-gitops.git
+  targetRevision: main
+
+argocd:
+  namespace: openshift-gitops
+
+catalogSource:
+  enabled: false
+  name: redhat-operators-snapshot
+
+cluster:
+  subdomain: ""
+
+matrix:
+  enabled: true
+  name: matrix
+  namespace: matrix
+
+rocketchat:
+  enabled: true
+  name: rocketchat
+  namespace: rocketchat
+
+helpdesk:
+  enabled: true
+  name: helpdesk
+  namespace: helpdesk
+
+admin:
+  enabled: true
+  name: admin-m3
+  namespace: admin-m3
+
+serviceInterconnect:
+  enabled: true
+  name: service-interconnect
+
+sharedDatabase:
+  enabled: true
+  name: shared-database
+  namespace: shared-database
+
+camelFlows:
+  enabled: true
+  name: camel-flows
+  namespace: camel-flows
+
+filestash:
+  enabled: true
+  name: filestash
+  namespace: filestash
+
+connectivityLink:
+  enabled: true
+  name: connectivity-link
+  aiGateway:
+    namespace: ai-gateway
+  llmApi:
+    namespace: llm-api
+    host: ""
+
+showroom:
+  enabled: true
+  name: showroom
+  namespace: showroom

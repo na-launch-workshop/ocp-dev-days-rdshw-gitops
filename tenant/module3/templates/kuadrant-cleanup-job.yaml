@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-kuadrant-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: Kuadrant cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        tenant_namespace: {{ include "user-workload.namespace" . | quote }}
+      tasks:
+        - name: Delete AuthPolicy
+          kubernetes.core.k8s:
+            api_version: kuadrant.io/v1
+            kind: AuthPolicy
+            name: ai-proxy-auth
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Delete TokenRateLimitPolicy
+          kubernetes.core.k8s:
+            api_version: kuadrant.io/v1alpha1
+            kind: TokenRateLimitPolicy
+            name: openai-token-limits
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+            state: absent
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kuadrant-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: kuadrant-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-kuadrant-cleanup-{{ .Values.tenant.username }}

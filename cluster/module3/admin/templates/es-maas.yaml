@@ -1,0 +1,27 @@
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: vault-maas
+  namespace: {{ .Values.kuadrantNamespace }}
+  labels:
+    {{- include "admin.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  refreshInterval: 5m
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: vault-secret-store
+  data:
+    - secretKey: api_key
+      remoteRef:
+        key: secrets/litellm/credentials
+        property: api_key
+    - secretKey: base_url
+      remoteRef:
+        key: secrets/litellm/credentials
+        property: base_url
+  target:
+    name: vault-maas
+    creationPolicy: Owner

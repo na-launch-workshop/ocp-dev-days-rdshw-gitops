@@ -1,0 +1,28 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docs-proxy-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen 8081;
+        location / {
+            add_header Set-Cookie "username=$http_x_forwarded_user; Path=/; SameSite=Lax" always;
+            proxy_pass http://showroom:8080;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            sub_filter_once off;
+            sub_filter_types text/html;
+            sub_filter 'src="https://showroom-{{ .Values.namespace }}.{{ .Values.cluster.subdomain }}/' 'src="/';
+        }
+        location = /logout {
+            add_header Set-Cookie "username=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT" always;
+            add_header Set-Cookie "_oauth_proxy=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT" always;
+            return 302 https://$host/oauth/sign_in;
+        }
+    }

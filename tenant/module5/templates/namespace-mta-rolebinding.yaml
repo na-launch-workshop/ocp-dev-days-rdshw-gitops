@@ -1,0 +1,17 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.tenant.openshiftUser }}-edit
+  namespace: {{ include "module5.mtaNamespace" . }}
+  labels:
+    {{- include "module5.labels" . | nindent 4 }}
+  annotations:
+    {{- include "module5.namespace-syncwave" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: edit
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ .Values.tenant.openshiftUser }}

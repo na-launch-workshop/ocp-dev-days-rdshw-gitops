@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: showroom-userdata
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+data:
+  user_data.yml: |
+    guid: {{ .Values.showroom.guid }}
+    openshift_cluster_ingress_domain: {{ .Values.cluster.subdomain }}
+    url-docserver: https://docserver-{{ .Values.namespace }}.{{ .Values.cluster.subdomain }}

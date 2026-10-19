@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-skupper-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: Skupper cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        tenant_namespace: {{ include "user-workload.namespace" . | quote }}
+        shared_db_namespace: {{ .Values.sharedDatabase.namespace | quote }}
+        resource_name: "token-{{ .Values.tenant.openshiftUser }}"
+      tasks:
+        - name: List Sites in tenant namespace
+          kubernetes.core.k8s_info:
+            api_version: skupper.io/v2alpha1
+            kind: Site
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+          register: r_sites
+          failed_when: false
+
+        - name: Delete Sites
+          kubernetes.core.k8s:
+            api_version: skupper.io/v2alpha1
+            kind: Site
+            name: "{{ "{{" }} item.metadata.name {{ "}}" }}"
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+            state: absent
+          loop: "{{ "{{" }} r_sites.resources | default([]) {{ "}}" }}"
+          ignore_errors: true
+
+        - name: List AccessGrants in tenant namespace
+          kubernetes.core.k8s_info:
+            api_version: skupper.io/v2alpha1
+            kind: AccessGrant
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+          register: r_grants
+          failed_when: false
+
+        - name: Delete AccessGrants
+          kubernetes.core.k8s:
+            api_version: skupper.io/v2alpha1
+            kind: AccessGrant
+            name: "{{ "{{" }} item.metadata.name {{ "}}" }}"
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+            state: absent
+          loop: "{{ "{{" }} r_grants.resources | default([]) {{ "}}" }}"
+          ignore_errors: true
+
+        - name: List Listeners in tenant namespace
+          kubernetes.core.k8s_info:
+            api_version: skupper.io/v2alpha1
+            kind: Listener
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+          register: r_listeners
+          failed_when: false
+
+        - name: Delete Listeners
+          kubernetes.core.k8s:
+            api_version: skupper.io/v2alpha1
+            kind: Listener
+            name: "{{ "{{" }} item.metadata.name {{ "}}" }}"
+            namespace: "{{ "{{" }} tenant_namespace {{ "}}" }}"
+            state: absent
+          loop: "{{ "{{" }} r_listeners.resources | default([]) {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Delete Link in shared-database namespace
+          kubernetes.core.k8s:
+            api_version: skupper.io/v2alpha1
+            kind: Link
+            name: "{{ "{{" }} resource_name {{ "}}" }}"
+            namespace: "{{ "{{" }} shared_db_namespace {{ "}}" }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Delete AccessToken in shared-database namespace
+          kubernetes.core.k8s:
+            api_version: skupper.io/v2alpha1
+            kind: AccessToken
+            name: "{{ "{{" }} resource_name {{ "}}" }}"
+            namespace: "{{ "{{" }} shared_db_namespace {{ "}}" }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Delete companion Secret in shared-database namespace
+          kubernetes.core.k8s:
+            api_version: v1
+            kind: Secret
+            name: "{{ "{{" }} resource_name {{ "}}" }}"
+            namespace: "{{ "{{" }} shared_db_namespace {{ "}}" }}"
+            state: absent
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: skupper-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: skupper-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-skupper-cleanup-{{ .Values.tenant.username }}

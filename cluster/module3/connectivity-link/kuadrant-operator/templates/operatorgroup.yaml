@@ -1,0 +1,11 @@
+apiVersion: operators.coreos.com/v1
+kind: OperatorGroup
+metadata:
+  name: kuadrant
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kuadrant-operator.labels" . | nindent 4 }}
+  annotations:
+    {{- include "kuadrant-operator.operatorgroup-syncwave" . | nindent 4 }}
+spec:
+  upgradeStrategy: Default

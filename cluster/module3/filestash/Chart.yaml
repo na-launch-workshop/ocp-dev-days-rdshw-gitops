@@ -1,0 +1,5 @@
+apiVersion: v2
+name: filestash
+description: A Helm chart for deploying Filestash S3 bucket viewer
+type: application
+version: 0.1.0

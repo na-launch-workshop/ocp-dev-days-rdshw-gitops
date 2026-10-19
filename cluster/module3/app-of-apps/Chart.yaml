@@ -1,0 +1,5 @@
+apiVersion: v2
+name: app-of-apps
+description: Root app-of-apps chart that deploys all platform components as Argo CD Applications
+type: application
+version: 0.1.0

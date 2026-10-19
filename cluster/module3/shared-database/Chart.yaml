@@ -1,0 +1,5 @@
+apiVersion: v2
+name: shared-database
+description: Shared PostgreSQL database with Skupper connectivity
+type: application
+version: 0.1.0

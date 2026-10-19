@@ -43,6 +43,8 @@ gitlab:
       repo:
         - name: parasol-insurance
           url: https://github.com/openshift-dev-days/parasol-insurance.git
+        - name: parasol-insurance-eap
+          url: https://github.com/openshift-dev-days/parasol-insurance-eap.git
         - name: parasol-insurance-manifests
           url: https://github.com/openshift-dev-days/parasol-insurance-manifests.git
         - name: devfiles

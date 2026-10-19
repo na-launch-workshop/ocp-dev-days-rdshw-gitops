@@ -1,0 +1,16 @@
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: allow-route-{{ .Values.tenant.username }}
+  namespace: {{ .Values.connectivityLink.llmApi.namespace }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{ include "user-workload.namespace" . }}
+  to:
+    - group: ""
+      kind: Service
+      name: {{ .Values.connectivityLink.llmApi.serviceName }}

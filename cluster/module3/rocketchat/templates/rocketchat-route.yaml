@@ -1,0 +1,17 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: rocketchat
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: rocketchat
+  annotations:
+    {{- include "rocketchat.workloads-syncwave" . | nindent 4 }}
+spec:
+  to:
+    kind: Service
+    name: rocketchat
+  port:
+    targetPort: 3000-tcp
+  tls:
+    termination: edge

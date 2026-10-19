@@ -3,3 +3,7 @@
 *.tmp
 *~
 .DS_Store
+
+# Helm chart packages
+charts/*.tgz
+**/charts/*.tgz

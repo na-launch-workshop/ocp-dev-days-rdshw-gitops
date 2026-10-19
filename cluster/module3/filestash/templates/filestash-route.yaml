@@ -1,0 +1,21 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: filestash
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "filestash.labels" . | nindent 4 }}
+    {{- include "filestash.selectorLabels" . | nindent 4 }}
+  annotations:
+    {{- include "filestash.workloads-syncwave" . | nindent 4 }}
+spec:
+  to:
+    kind: Service
+    name: filestash
+    weight: 100
+  port:
+    targetPort: 8334-tcp
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+  wildcardPolicy: None

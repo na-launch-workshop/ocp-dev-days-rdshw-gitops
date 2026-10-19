@@ -1,0 +1,27 @@
+{{- range $app := list "m2k" "r2k" "k2m" "k2r" }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: camel-flow-{{ $app }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "camel-flows.labels" $ | nindent 4 }}
+data:
+{{- range $path, $_ := $.Files.Glob (printf "sources/flows/%s/*" $app) }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: camel-kamelets
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "camel-flows.labels" . | nindent 4 }}
+data:
+{{- range $path, $_ := .Files.Glob "sources/kamelets/*" }}
+  {{ base $path }}: |-
+{{ $.Files.Get $path | indent 4 }}
+{{- end }}

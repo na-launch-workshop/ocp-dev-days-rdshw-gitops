@@ -1,0 +1,67 @@
+{{- $namespace := include "user-workload.namespace" . -}}
+{{- $labels := include "user-workload.labels" . -}}
+{{- $imageRegistry := "image-registry.openshift-image-registry.svc:5000" -}}
+{{- $kafkaAnnotation := `[{"apiVersion":"apps/v1","kind":"Deployment","name":"my-cluster-kafka"}]` -}}
+{{- range $app := list "m2k" "r2k" "k2m" "k2r" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $app }}
+  namespace: {{ $namespace }}
+  labels:
+    app: {{ $app }}
+    app.kubernetes.io/part-of: org.example.project
+    app.kubernetes.io/runtime: camel
+    app.openshift.io/runtime: camel
+    {{- $labels | nindent 4 }}
+  annotations:
+    app.openshift.io/connects-to: '{{ $kafkaAnnotation }}'
+spec:
+  replicas: 0
+  selector:
+    matchLabels:
+      app: {{ $app }}
+  template:
+    metadata:
+      labels:
+        app: {{ $app }}
+        app.kubernetes.io/part-of: org.example.project
+    spec:
+      containers:
+        - name: {{ $app }}
+          image: {{ $imageRegistry }}/{{ $.Values.camelFlows.namespace }}/{{ $app }}:{{ $.Values.camelFlows.imageTag }}
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - secretRef:
+                name: camel-credentials
+          env:
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            {{- if eq $app "k2r" }}
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Dcamel.component.xslt-saxon.secureProcessing=false"
+            {{- end }}
+          readinessProbe:
+            httpGet:
+              path: /observe/health/ready
+              port: 9876
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /observe/health/live
+              port: 9876
+            initialDelaySeconds: 10
+          startupProbe:
+            httpGet:
+              path: /observe/health/started
+              port: 9876
+            initialDelaySeconds: 5
+  revisionHistoryLimit: 2
+---
+{{- end }}

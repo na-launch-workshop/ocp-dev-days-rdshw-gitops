@@ -1,0 +1,102 @@
+tenant:
+  username: ""
+  openshiftUser: ""
+  password: ""
+
+kafka:
+  clusterName: my-cluster
+  version: 4.1.0
+  metadataVersion: 4.1-IV1
+  dualRole:
+    replicas: 1
+    resources:
+      memory: 512Mi
+      cpu: 200m
+  topologyMarker:
+    runtime: redhat
+    partOf: my-cluster-topology
+  config:
+    offsetsTopicReplicationFactor: 1
+    transactionStateLogReplicationFactor: 1
+    transactionStateLogMinIsr: 1
+    defaultReplicationFactor: 1
+    minInsyncReplicas: 1
+
+matrix:
+  namespace: matrix
+  serverName: rhintegration.demo
+  admin:
+    username: admin
+    password: admin
+
+rocketchat:
+  namespace: rocketchat
+  admin:
+    username: rcadmin
+    password: camel
+
+helpdesk:
+  namespace: helpdesk
+  admin:
+    username: admin
+    password: "Openshift1!"
+
+sharedDatabase:
+  namespace: shared-database
+  adminUser: dbadmin
+  adminPassword: dbadmin123
+  database: labdb
+
+admin:
+  namespace: admin-m3
+
+vault:
+  name: vault
+  namespace: vault
+
+cluster:
+  appsDomain: ""
+
+devspaces:
+  namespace: openshift-devspaces
+
+devworkspace:
+  name: camel-lab
+  gitRepo: "https://github.com/openshift-dev-days/module3-dev-workspace.git"
+  gitBranch: main
+  image: image-registry.openshift-image-registry.svc:5000/workspace-images/app-connect-ai:latest
+  memoryLimit: 3Gi
+  m2VolumeSize: 3Gi
+  prepWorkspace:
+    image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+
+camelFlows:
+  namespace: camel-flows
+  imageTag: "1.0-SNAPSHOT"
+
+s3:
+  pdfUrl: "https://raw.githubusercontent.com/openshift-dev-days/module3-dev-workspace/main/support/pdfs/policy_61356291.pdf"
+  pdfFile: "policy_61356291.pdf"
+
+connectivityLink:
+  aiGateway:
+    namespace: ai-gateway
+    gatewayName: internal-ai-gateway
+    gatewayClassName: openshift-default
+  llmApi:
+    namespace: llm-api
+    serviceName: ai-api-external
+  kuadrantNamespace: kuadrant-system
+
+litellm:
+  url: ""
+  apiKey: ""
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    kafka: "0"
+    matrix: "0"
+    rocketchat: "0"
+    helpdesk: "0"

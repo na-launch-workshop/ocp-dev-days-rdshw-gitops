@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: synapse
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: synapse
+  annotations:
+    {{- include "matrix.workloads-syncwave" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+  - name: http
+    port: 8008
+    protocol: TCP
+    targetPort: 8008
+  selector:
+    app: synapse
+  type: ClusterIP

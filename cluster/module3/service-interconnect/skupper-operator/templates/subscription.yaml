@@ -1,0 +1,18 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: Subscription
+metadata:
+  name: {{ .Values.subscription.name }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "skupper-operator.labels" . | nindent 4 }}
+  annotations:
+    {{- include "skupper-operator.subscription-syncwave" . | nindent 4 }}
+spec:
+  channel: {{ .Values.subscription.channel }}
+  installPlanApproval: {{ .Values.subscription.installPlanApproval }}
+  name: {{ .Values.subscription.name }}
+  source: {{ .Values.subscription.source }}
+  sourceNamespace: {{ .Values.subscription.sourceNamespace }}
+  {{- if .Values.subscription.startingCSV }}
+  startingCSV: {{ .Values.subscription.startingCSV }}
+  {{- end }}

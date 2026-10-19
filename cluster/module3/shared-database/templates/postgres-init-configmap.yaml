@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "shared-database.database-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}
+data:
+  init.sh: |
+    #!/bin/bash
+    psql -U postgres <<EOSQL
+    SELECT 'CREATE DATABASE {{ .Values.postgres.database }}' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '{{ .Values.postgres.database }}')\gexec
+    DO \$\$
+    BEGIN
+      IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '{{ .Values.postgres.adminUser }}') THEN
+        CREATE ROLE {{ .Values.postgres.adminUser }} LOGIN PASSWORD '{{ .Values.postgres.adminPassword }}';
+      END IF;
+    END
+    \$\$;
+    GRANT ALL PRIVILEGES ON DATABASE {{ .Values.postgres.database }} TO {{ .Values.postgres.adminUser }};
+    ALTER ROLE {{ .Values.postgres.adminUser }} CREATEROLE;
+    GRANT CREATE ON DATABASE {{ .Values.postgres.database }} TO {{ .Values.postgres.adminUser }};
+    EOSQL

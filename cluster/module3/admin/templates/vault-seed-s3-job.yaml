@@ -1,0 +1,107 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vault-seed-s3
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: vault-seed-s3
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["noobaa-admin"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get"]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: vault-seed-s3
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: vault-seed-s3
+subjects:
+  - kind: ServiceAccount
+    name: vault-seed-s3
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-seed-s3
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: vault-seed-s3
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: registry.redhat.io/openshift4/ose-cli:v4.15.0
+          env:
+            - name: VAULT_NS
+              value: {{ .Values.vault.namespace | quote }}
+            - name: VAULT_POD
+              value: {{ .Values.vault.pod | quote }}
+            - name: NOOBAA_NS
+              value: {{ .Values.s3.noobaaNamespace | quote }}
+            - name: NOOBAA_SECRET
+              value: {{ .Values.s3.noobaaSecret | quote }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+
+              echo "Checking if S3 credentials already exist in Vault..."
+              EXISTING=$(oc exec ${VAULT_POD} -n ${VAULT_NS} -- \
+                vault kv get -format=json kv/secrets/s3/noobaa 2>/dev/null || echo "")
+
+              if [ -n "$EXISTING" ]; then
+                echo "S3 credentials already in Vault — skipping."
+                exit 0
+              fi
+
+              echo "Reading NooBaa credentials..."
+              ACCESS_KEY=$(oc get secret ${NOOBAA_SECRET} -n ${NOOBAA_NS} \
+                -o jsonpath='{.data.AWS_ACCESS_KEY_ID}' | base64 -d)
+              SECRET_KEY=$(oc get secret ${NOOBAA_SECRET} -n ${NOOBAA_NS} \
+                -o jsonpath='{.data.AWS_SECRET_ACCESS_KEY}' | base64 -d)
+              S3_ENDPOINT="https://$(oc get route s3 -n ${NOOBAA_NS} -o jsonpath='{.spec.host}')"
+
+              echo "Writing S3 credentials to Vault..."
+              oc exec ${VAULT_POD} -n ${VAULT_NS} -- \
+                vault kv put kv/secrets/s3/noobaa \
+                  accessKey="${ACCESS_KEY}" \
+                  secretKey="${SECRET_KEY}" \
+                  endpoint="${S3_ENDPOINT}"
+
+              echo "Done — S3 credentials seeded to Vault."

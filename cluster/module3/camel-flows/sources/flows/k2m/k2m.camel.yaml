@@ -1,0 +1,35 @@
+- route:
+    description: Kafka to Matrix
+    from:
+      description: Kafka
+      uri: kafka
+      parameters:
+        brokers: my-cluster-kafka-bootstrap:9092
+        topic: myroom
+      steps:
+        - filter:
+            steps:
+              - stop: {}
+            disabled: false
+            jq:
+              expression: .source == "matrix"
+              source: common
+        - step:
+            id: kaoto-datamapper-47762710
+            steps:
+              - to:
+                  id: kaoto-datamapper-xslt-1540
+                  uri: xslt-saxon:kaoto-datamapper-47762710.xsl
+                  parameters:
+                    failOnNullBody: false
+        - log:
+            message: ${body}
+        - to:
+            description: Matrix
+            uri: kamelet
+            parameters:
+              room: "{{env:MATRIX_ROOM}}"
+              templateId: matrix-sink
+              token: "{{env:MATRIX_TOKEN}}"
+              synapseUrl: "{{env:MATRIX_SYNAPSE_URL}}"
+      variableReceive: common

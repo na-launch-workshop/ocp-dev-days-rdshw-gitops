@@ -1,0 +1,5 @@
+apiVersion: v2
+name: skupper-operator
+description: Installs the Skupper (Service Interconnect) operator via OLM
+type: application
+version: 0.1.0

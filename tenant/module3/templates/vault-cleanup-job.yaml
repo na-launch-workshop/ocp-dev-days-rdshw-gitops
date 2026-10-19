@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-vault-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: Vault tenant cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+        username: {{ .Values.tenant.username | quote }}
+        vault_paths:
+          - "kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/matrix"
+          - "kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/rocketchat"
+          - "kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/helpdesk"
+          - "kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/kuadrant"
+      tasks:
+        - name: Delete Vault entries
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: "vault kv metadata delete {{ "{{" }} item {{ "}}" }}"
+          loop: "{{ "{{" }} vault_paths {{ "}}" }}"
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vault-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: vault-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-vault-cleanup-{{ .Values.tenant.username }}

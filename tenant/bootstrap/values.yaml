@@ -22,3 +22,13 @@ cluster:
 
 registry:
   host: ""
+
+litellm:
+  url: ""
+  apiKey: ""
+
+module3:
+  enabled: true
+
+module5:
+  enabled: true

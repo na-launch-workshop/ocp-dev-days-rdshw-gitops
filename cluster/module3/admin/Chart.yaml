@@ -1,0 +1,5 @@
+apiVersion: v2
+name: admin
+description: Administrative namespace for cross-namespace operations
+type: application
+version: 0.1.0

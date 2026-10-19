@@ -1,0 +1,13 @@
+apiVersion: v2
+name: connectivity-link
+description: A Helm chart for Connectivity Link (Kuadrant) — API gateway for LLM access
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: kuadrant-operator
+    version: 0.1.0
+    repository: file://kuadrant-operator
+  - name: connectivity-link-instance
+    version: 0.1.0
+    repository: file://connectivity-link-instance

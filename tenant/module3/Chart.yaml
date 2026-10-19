@@ -1,0 +1,5 @@
+apiVersion: v2
+name: user-workload
+description: Per-user workload chart — deploys tenant resources for a single user
+type: application
+version: 0.1.0

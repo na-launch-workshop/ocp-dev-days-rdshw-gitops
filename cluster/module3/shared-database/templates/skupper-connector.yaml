@@ -1,0 +1,13 @@
+apiVersion: skupper.io/v2alpha1
+kind: Connector
+metadata:
+  name: postgres
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "shared-database.skupper-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}
+spec:
+  routingKey: postgres
+  port: 5432
+  selector: app=postgres

@@ -1,0 +1,86 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: showroom
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+    app: showroom
+  annotations:
+    {{- include "showroom.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: showroom
+  template:
+    metadata:
+      labels:
+        app: showroom
+      annotations:
+        checksum/userdata: {{ include (print $.Template.BasePath "/showroom-userdata.yaml") . | sha256sum }}
+    spec:
+      initContainers:
+        - name: git-cloner
+          image: {{ .Values.showroom.images.gitCloner }}
+          env:
+            - name: GIT_REPO_URL
+              value: {{ .Values.showroom.contentRepo | quote }}
+            - name: GIT_REPO_REF
+              value: {{ .Values.showroom.contentRef | quote }}
+            - name: CLONE_DIR
+              value: /showroom/repo
+          volumeMounts:
+            - name: showroom-files
+              mountPath: /showroom/repo
+              subPath: repo
+        - name: antora-builder
+          image: {{ .Values.showroom.images.antora }}
+          env:
+            - name: FILES_DIR
+              value: /showroom/repo
+            - name: OUTPUT_DIR
+              value: /showroom/www
+            - name: ANTORA_SITE_FILE
+              value: {{ .Values.showroom.antoraPlaybook | quote }}
+          volumeMounts:
+            - name: showroom-files
+              mountPath: /showroom/repo
+              subPath: repo
+            - name: showroom-files
+              mountPath: /showroom/www
+              subPath: www
+            - name: user-data
+              mountPath: /user_data
+      containers:
+        - name: content
+          image: {{ .Values.showroom.images.content }}
+          ports:
+            - containerPort: 8000
+          env:
+            - name: DOMAIN
+              value: {{ .Values.cluster.subdomain | quote }}
+            - name: GUID
+              value: {{ .Values.showroom.guid | quote }}
+          volumeMounts:
+            - name: showroom-files
+              mountPath: /showroom/repo
+              subPath: repo
+            - name: showroom-files
+              mountPath: /showroom/www
+              subPath: www
+            - name: user-data
+              mountPath: /user_data
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: showroom-files
+          emptyDir: {}
+        - name: user-data
+          configMap:
+            name: showroom-userdata

@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-rc-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: RocketChat cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        rc_url: "http://rocketchat.{{ .Values.rocketchat.namespace }}.svc.cluster.local:3000"
+        admin_user: {{ .Values.rocketchat.admin.username | quote }}
+        admin_pass: {{ .Values.rocketchat.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        room_name: {{ include "user-workload.roomname" . | trim | quote }}
+        ai_channel: {{ include "user-workload.ai-support-channel" . | trim | quote }}
+      tasks:
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/login"
+            method: POST
+            body_format: json
+            body:
+              user: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+          ignore_errors: true
+
+        - name: Skip if RocketChat unreachable
+          ansible.builtin.meta: end_play
+          when: r_admin_login is failed
+
+        - name: Set admin credentials
+          ansible.builtin.set_fact:
+            admin_id: "{{ "{{" }} r_admin_login.json.data.userId {{ "}}" }}"
+            admin_token: "{{ "{{" }} r_admin_login.json.data.authToken {{ "}}" }}"
+
+        - name: Get integrations list
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.list?count=100"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          register: r_integrations
+          ignore_errors: true
+
+        - name: Find webhook IDs for room channel
+          ansible.builtin.set_fact:
+            room_webhook_ids: "{{ "{{" }} r_integrations.json.integrations | selectattr('channel', 'defined') | selectattr('channel', 'contains', '#' ~ room_name) | map(attribute='_id') | list {{ "}}" }}"
+          when: r_integrations is succeeded
+
+        - name: Delete room webhooks
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.remove"
+            method: POST
+            body_format: json
+            body:
+              type: webhook-outgoing
+              integrationId: "{{ "{{" }} item {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          loop: "{{ "{{" }} room_webhook_ids | default([]) {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Find webhook IDs for AI Support channel
+          ansible.builtin.set_fact:
+            ai_webhook_ids: "{{ "{{" }} r_integrations.json.integrations | selectattr('channel', 'defined') | selectattr('channel', 'contains', '#' ~ ai_channel) | map(attribute='_id') | list {{ "}}" }}"
+          when: r_integrations is succeeded
+
+        - name: Delete AI Support webhooks
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/integrations.remove"
+            method: POST
+            body_format: json
+            body:
+              type: webhook-outgoing
+              integrationId: "{{ "{{" }} item {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          loop: "{{ "{{" }} ai_webhook_ids | default([]) {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Delete room channel
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/groups.delete"
+            method: POST
+            body_format: json
+            body:
+              roomName: "{{ "{{" }} room_name {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Delete AI Support channel
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/groups.delete"
+            method: POST
+            body_format: json
+            body:
+              roomName: "{{ "{{" }} ai_channel {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          ignore_errors: true
+
+        - name: Delete user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} rc_url {{ "}}" }}/api/v1/users.delete"
+            method: POST
+            body_format: json
+            body:
+              username: "{{ "{{" }} username {{ "}}" }}"
+            headers:
+              X-User-Id: "{{ "{{" }} admin_id {{ "}}" }}"
+              X-Auth-Token: "{{ "{{" }} admin_token {{ "}}" }}"
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rc-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: rc-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-rc-cleanup-{{ .Values.tenant.username }}

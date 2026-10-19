@@ -1,0 +1,32 @@
+namespace: showroom
+
+cluster:
+  subdomain: ""
+
+showroom:
+  contentRepo: "https://github.com/rh-app-connect-ai/showroom.git"
+  contentRef: "main"
+  antoraPlaybook: "default-site.yml"
+  guid: "lab"
+  images:
+    content: "quay.io/rhpds/showroom-content:v1.4.2"
+    gitCloner: "quay.io/rhpds/git-cloner:v1.1.5"
+    antora: "quay.io/rhpds/antora:v1.3.0"
+
+proxy:
+  images:
+    oauthProxy: "registry.redhat.io/openshift4/ose-oauth-proxy:v4.14"
+    nginx: "nginxinc/nginx-unprivileged:alpine"
+
+docserver:
+  image: "image-registry.openshift-image-registry.svc:5000/workspace-images/app-connect-ai:latest"
+  tenant:
+    namespacePrefix: ""
+    namespaceSuffix: "-devspaces"
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    config: "0"
+    workloads: "1"

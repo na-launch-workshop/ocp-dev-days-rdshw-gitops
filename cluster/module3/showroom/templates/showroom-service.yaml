@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: showroom
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+spec:
+  selector:
+    app: showroom
+  ports:
+    - port: 8080
+      targetPort: 8000

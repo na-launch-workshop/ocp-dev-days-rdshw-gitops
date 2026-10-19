@@ -1,0 +1,9 @@
+apiVersion: skupper.io/v2alpha1
+kind: Site
+metadata:
+  name: database-site
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "shared-database.skupper-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}

@@ -1,0 +1,5 @@
+apiVersion: v2
+name: connectivity-link-instance
+description: Connectivity Link resources — Gateway, ServiceEntry, AuthPolicy
+type: application
+version: 0.1.0

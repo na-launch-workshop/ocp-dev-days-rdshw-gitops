@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rocketchat-create-admin
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: create-admin
+        image: registry.redhat.io/openshift4/ose-tools-rhel9:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          RC_URL="http://rocketchat.{{ .Values.namespace }}.svc.cluster.local:3000"
+
+          echo "Waiting for Rocket Chat to be ready..."
+          until curl -sf "${RC_URL}/api/v1/info" > /dev/null 2>&1; do
+            echo "Rocket Chat not ready, retrying in 10s..."
+            sleep 10
+          done
+          echo "Rocket Chat is ready."
+
+          echo "Registering admin user..."
+          REG_OUTPUT=$(curl -s -w "\n%{http_code}" -X POST "${RC_URL}/api/v1/users.register" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "name": "{{ .Values.rocketchat_admin.username }}",
+              "pass": "{{ .Values.rocketchat_admin.password }}",
+              "email": "{{ .Values.rocketchat_admin.email }}",
+              "username": "{{ .Values.rocketchat_admin.username }}"
+            }')
+          REG_CODE=$(echo "$REG_OUTPUT" | tail -1)
+          REG_BODY=$(echo "$REG_OUTPUT" | sed '$d')
+          echo "Register response ($REG_CODE): $REG_BODY"
+
+          if [ "$REG_CODE" != "200" ]; then
+            if echo "$REG_BODY" | grep -qi "already in use\|Username is already in use"; then
+              echo "Admin user already exists (expected on re-sync)"
+            else
+              echo "Failed to register admin user"
+              exit 1
+            fi
+          fi
+
+          echo "Logging in as admin..."
+          LOGIN_OUTPUT=$(curl -s -w "\n%{http_code}" -X POST "${RC_URL}/api/v1/login" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "user": "{{ .Values.rocketchat_admin.username }}",
+              "password": "{{ .Values.rocketchat_admin.password }}"
+            }')
+          LOGIN_CODE=$(echo "$LOGIN_OUTPUT" | tail -1)
+          LOGIN_BODY=$(echo "$LOGIN_OUTPUT" | sed '$d')
+
+          if [ "$LOGIN_CODE" != "200" ]; then
+            echo "Login failed ($LOGIN_CODE): $LOGIN_BODY"
+            exit 1
+          fi
+
+          USER_ID=$(echo "$LOGIN_BODY" | sed -n 's/.*"userId":"\([^"]*\)".*/\1/p')
+          AUTH_TOKEN=$(echo "$LOGIN_BODY" | sed -n 's/.*"authToken":"\([^"]*\)".*/\1/p')
+          echo "Logged in. userId=$USER_ID"
+
+          echo "Disabling API rate limiter..."
+          RATE_OUTPUT=$(curl -s -w "\n%{http_code}" -X POST "${RC_URL}/api/v1/settings/API_Enable_Rate_Limiter" \
+            -H "Content-Type: application/json" \
+            -H "X-User-Id: ${USER_ID}" \
+            -H "X-Auth-Token: ${AUTH_TOKEN}" \
+            -H "X-2fa-method: password" \
+            -H "X-2fa-code: {{ .Values.rocketchat_admin.twofa_sha256 }}" \
+            -d '{"value": false}')
+          RATE_CODE=$(echo "$RATE_OUTPUT" | tail -1)
+          RATE_BODY=$(echo "$RATE_OUTPUT" | sed '$d')
+
+          if [ "$RATE_CODE" = "200" ]; then
+            echo "Rate limiter disabled successfully"
+          else
+            echo "Warning: Could not disable rate limiter ($RATE_CODE): $RATE_BODY"
+          fi
+
+          echo "Admin setup complete."

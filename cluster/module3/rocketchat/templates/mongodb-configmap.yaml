@@ -1,0 +1,81 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "rocketchat.config-syncwave" . | nindent 4 }}
+data:
+  setup.sh: |-
+    #!/usr/bin/env bash
+
+    sleep 15
+    echo starting replication...
+    /etc/db/config/start-replication.sh > /tmp/s.out
+  start-replication.js: |-
+    if(isStatusOK()){
+    	print(" ### Replication OK");
+    	printjson(rs.status());
+    } else {
+    	print(" ### Starting replication...");
+    	try {
+    		rs.initiate(
+    		   {
+    		      _id: "rs0",
+    		      version: 1,
+    		      members: [
+    		         { _id: 0, host : "mongodb:27017" }
+    		      ]
+    		   }
+    		)
+
+    		while (! db.isMaster().ismaster ) {
+    			sleep(1000);
+    		}
+
+    		print(" ### try initiate done");
+    	}
+    	catch (e) {
+    		print(" ### initiate failed code: " + e.code);
+    		printjson(e);
+    	}
+
+    	sleep(5000);
+    	print(" ### Replica Set status");
+    	printjson(rs.status());
+
+    	db.getSiblingDB("admin").createUser({user:"{{ .Values.mongodb.adminUser }}",pwd:"{{ .Values.mongodb.adminPassword }}",roles:[]})
+    	print(" ### Admin user created");
+    }
+
+    var sleep = function (milliseconds) {
+      var start = new Date().getTime();
+      for (var i = 0; i < 1e7; i++) {
+        if ((new Date().getTime() - start) > milliseconds){
+          break;
+        }
+      }
+    };
+
+    function isStatusOK() {
+
+    	var ok = true;
+    	var replStatus;
+
+    	try {
+    		replStatus = rs.status();
+    	}
+    	catch (e) {
+    		ok = false;
+    		print("status code: " + e.code);
+    	}
+
+      	return ok;
+    }
+  start-replication.sh: |-
+    #!/usr/bin/env bash
+
+    scriptPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+    echo "$scriptPath"
+    echo running as `whoami`
+    mongosh -f $scriptPath/start-replication.js

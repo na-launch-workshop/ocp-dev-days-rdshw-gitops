@@ -1,0 +1,6 @@
+connectivity-link-instance:
+  aiGateway:
+    namespace: ai-gateway
+  llmApi:
+    namespace: llm-api
+    host: ""

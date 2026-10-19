@@ -1,0 +1,35 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: accesstoken-naming-policy-m3
+  annotations:
+    {{- include "shared-database.rbac-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["skupper.io"]
+        apiVersions: ["*"]
+        operations: ["CREATE"]
+        resources: ["accesstokens"]
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: {{ .Values.namespace }}
+  validations:
+    - expression: "object.metadata.name == 'token-' + request.userInfo.username"
+      message: "AccessToken name must be 'token-<your-username>'"
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: accesstoken-naming-binding-m3
+  annotations:
+    {{- include "shared-database.rbac-syncwave" . | nindent 4 }}
+  labels:
+    {{- include "shared-database.labels" . | nindent 4 }}
+spec:
+  policyName: accesstoken-naming-policy-m3
+  validationActions:
+    - Deny

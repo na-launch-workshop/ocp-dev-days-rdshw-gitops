@@ -1,0 +1,5 @@
+apiVersion: v2
+name: module5
+description: Per-tenant Module 5 workload — Dev Spaces workspace for MTA / Developer Lightspeed on parasol-insurance-eap
+type: application
+version: 0.1.0

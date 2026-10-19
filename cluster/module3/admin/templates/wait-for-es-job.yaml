@@ -1,0 +1,92 @@
+{{- if .Values.waitForES.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: wait-for-es
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: wait-for-es
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+rules:
+  - apiGroups: ["external-secrets.io"]
+    resources: ["externalsecrets"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: wait-for-es
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: wait-for-es
+subjects:
+  - kind: ServiceAccount
+    name: wait-for-es
+    namespace: {{ .Values.namespace }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wait-for-es
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: wait-for-es
+      restartPolicy: Never
+      containers:
+        - name: wait
+          image: registry.redhat.io/openshift4/ose-cli:v4.15.0
+          env:
+            - name: NS
+              value: {{ .Values.namespace | quote }}
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for ExternalSecret admission to be ready..."
+              for i in $(seq 1 60); do
+                if oc apply --dry-run=server -f - <<EOF 2>/dev/null
+              apiVersion: external-secrets.io/v1beta1
+              kind: ExternalSecret
+              metadata:
+                name: readiness-probe
+                namespace: ${NS}
+              spec:
+                secretStoreRef:
+                  kind: ClusterSecretStore
+                  name: vault-secret-store
+                data: []
+                target:
+                  name: readiness-probe
+              EOF
+                then
+                  echo "ExternalSecret admission ready after ${i} attempts."
+                  exit 0
+                fi
+                echo "Attempt ${i}/60 - not ready, retrying in 10s..."
+                sleep 10
+              done
+              echo "Timed out waiting for ExternalSecret readiness"
+              exit 1
+{{- end }}

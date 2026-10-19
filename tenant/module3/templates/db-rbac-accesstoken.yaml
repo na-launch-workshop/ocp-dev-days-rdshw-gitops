@@ -1,0 +1,39 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.tenant.openshiftUser }}-accesstoken-creator
+  namespace: {{ .Values.sharedDatabase.namespace }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["skupper.io"]
+    resources: ["accesstokens"]
+    verbs: ["create"]
+  - apiGroups: ["skupper.io"]
+    resources: ["accesstokens"]
+    resourceNames: ["token-{{ .Values.tenant.openshiftUser }}"]
+    verbs: ["get", "list", "watch", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: ["token-{{ .Values.tenant.openshiftUser }}"]
+    verbs: ["delete"]
+  - apiGroups: ["skupper.io"]
+    resources: ["links"]
+    resourceNames: ["token-{{ .Values.tenant.openshiftUser }}"]
+    verbs: ["delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.tenant.openshiftUser }}-accesstoken-creator
+  namespace: {{ .Values.sharedDatabase.namespace }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ .Values.tenant.openshiftUser }}-accesstoken-creator
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: {{ .Values.tenant.openshiftUser }}

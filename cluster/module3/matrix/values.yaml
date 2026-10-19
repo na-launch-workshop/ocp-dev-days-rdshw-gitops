@@ -1,0 +1,31 @@
+namespace: matrix
+
+cluster:
+  subdomain: ""
+
+synapse:
+  image: quay.io/redhatintegration/synapse:v1.85.0
+  serverName: rhintegration.demo
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+    limits:
+      memory: 2Gi
+      cpu: "1000m"
+  storage:
+    size: 5Gi
+
+synapse_admin:
+  username: admin
+  password: admin
+
+element:
+  image: vectorim/element-web:latest
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    configAndStorage: "0"
+    workloads: "1"

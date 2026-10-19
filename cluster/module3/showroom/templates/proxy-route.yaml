@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: docs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.workloads-syncwave" . | nindent 4 }}
+spec:
+  host: docs.{{ .Values.cluster.subdomain }}
+  port:
+    targetPort: proxy
+  to:
+    name: docs-proxy
+  tls:
+    termination: reencrypt

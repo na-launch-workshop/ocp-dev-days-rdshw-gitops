@@ -1,0 +1,109 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-matrix-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+data:
+  playbook.yaml: |
+    ---
+    - name: Matrix cleanup
+      hosts: localhost
+      gather_facts: false
+      vars:
+        synapse_url: "http://synapse.{{ .Values.matrix.namespace }}.svc.cluster.local:8008"
+        server_name: {{ .Values.matrix.serverName | quote }}
+        admin_user: {{ .Values.matrix.admin.username | quote }}
+        admin_pass: {{ .Values.matrix.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        room_name: {{ include "user-workload.roomname" . | trim | quote }}
+      tasks:
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/r0/login"
+            method: POST
+            body_format: json
+            body:
+              type: m.login.password
+              user: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+          ignore_errors: true
+
+        - name: Skip if Synapse unreachable
+          ansible.builtin.meta: end_play
+          when: r_admin_login is failed
+
+        - name: Set admin token
+          ansible.builtin.set_fact:
+            admin_token: "{{ "{{" }} r_admin_login.json.access_token {{ "}}" }}"
+
+        - name: Resolve room alias
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/v3/directory/room/%23{{ "{{" }} room_name {{ "}}" }}:{{ "{{" }} server_name {{ "}}" }}"
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+          register: r_room_lookup
+          ignore_errors: true
+
+        - name: Delete room
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_synapse/admin/v2/rooms/{{ "{{" }} r_room_lookup.json.room_id | regex_replace('!', '%21') | regex_replace(':', '%3A') {{ "}}" }}"
+            method: DELETE
+            body_format: json
+            body:
+              purge: true
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+          when: r_room_lookup is succeeded
+          ignore_errors: true
+
+        - name: Deactivate user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_synapse/admin/v1/deactivate/@{{ "{{" }} username {{ "}}" }}:{{ "{{" }} server_name {{ "}}" }}"
+            method: POST
+            body_format: json
+            body:
+              erase: true
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+          ignore_errors: true
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: matrix-cleanup-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PreDelete
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: matrix-cleanup
+          command:
+            - /bin/bash
+            - '-c'
+            - ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-matrix-cleanup-{{ .Values.tenant.username }}

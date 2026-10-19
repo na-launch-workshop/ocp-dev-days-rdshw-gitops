@@ -1,0 +1,33 @@
+{{- if .Values.showroom.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" .Values.showroom.name "namespace" .Values.argocd.namespace "syncWave" "3") }}
+spec:
+  destination:
+    namespace: {{ .Values.showroom.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/module3/showroom
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        namespace: {{ .Values.showroom.namespace }}
+        cluster:
+          subdomain: {{ .Values.cluster.subdomain }}
+  syncPolicy:
+    automated:
+      prune: false
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m0s
+      limit: 30
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+      - SkipDryRunOnMissingResource=true
+{{- end }}

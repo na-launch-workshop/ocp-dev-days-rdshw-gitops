@@ -1,0 +1,20 @@
+{{- if .Values.serviceInterconnect.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" .Values.serviceInterconnect.name "namespace" .Values.argocd.namespace "syncWave" "0") }}
+spec:
+  destination:
+    namespace: openshift-operators
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/module3/service-interconnect
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        skupper-operator:
+          subscription:
+            source: {{ include "app-of-apps.operatorSource" . }}
+{{ include "app-of-apps.syncPolicy" . | indent 2 }}
+{{- end }}

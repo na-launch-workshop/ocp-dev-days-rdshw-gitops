@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: docs-proxy
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+    app: docs-proxy
+  annotations:
+    {{- include "showroom.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: docs-proxy
+  template:
+    metadata:
+      labels:
+        app: docs-proxy
+    spec:
+      serviceAccountName: docs-proxy
+      containers:
+        - name: oauth-proxy
+          image: {{ .Values.proxy.images.oauthProxy }}
+          ports:
+            - containerPort: 8443
+              name: proxy
+          args:
+            - --https-address=:8443
+            - --provider=openshift
+            - --upstream=http://localhost:8081
+            - --tls-cert=/etc/tls/private/tls.crt
+            - --tls-key=/etc/tls/private/tls.key
+            - --cookie-secret={{ randAlphaNum 16 | b64enc }}
+            - --openshift-service-account=docs-proxy
+            - --pass-user-headers=true
+            - --skip-auth-regex=^/logout
+          volumeMounts:
+            - name: tls
+              mountPath: /etc/tls/private
+        - name: nginx
+          image: {{ .Values.proxy.images.nginx }}
+          ports:
+            - containerPort: 8081
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: config
+          configMap:
+            name: docs-proxy-config
+        - name: tls
+          secret:
+            secretName: docs-proxy-tls

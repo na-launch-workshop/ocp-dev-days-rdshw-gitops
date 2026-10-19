@@ -1,0 +1,19 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: internal-ai-gateway
+  namespace: {{ .Values.aiGateway.namespace }}
+  labels:
+    {{- include "connectivity-link.labels" . | nindent 4 }}
+  annotations:
+    networking.istio.io/service-type: "ClusterIP"
+    {{- include "connectivity-link.workloads-syncwave" . | nindent 4 }}
+spec:
+  gatewayClassName: openshift-default
+  listeners:
+    - name: internal-http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All

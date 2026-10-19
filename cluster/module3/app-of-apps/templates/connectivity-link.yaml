@@ -1,0 +1,26 @@
+{{- if .Values.connectivityLink.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+{{ include "app-of-apps.metadata" (dict "name" .Values.connectivityLink.name "namespace" .Values.argocd.namespace "syncWave" "1") }}
+spec:
+  destination:
+    namespace: {{ .Values.connectivityLink.aiGateway.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    path: cluster/module3/connectivity-link
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        kuadrant-operator:
+          subscription:
+            source: {{ include "app-of-apps.operatorSource" . }}
+        connectivity-link-instance:
+          aiGateway:
+            namespace: {{ .Values.connectivityLink.aiGateway.namespace }}
+          llmApi:
+            namespace: {{ .Values.connectivityLink.llmApi.namespace }}
+            host: {{ .Values.connectivityLink.llmApi.host }}
+{{ include "app-of-apps.syncPolicy" . | indent 2 }}
+{{- end }}

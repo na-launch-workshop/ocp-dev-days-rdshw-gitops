@@ -1,0 +1,18 @@
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: element
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: element
+  annotations:
+    {{- include "matrix.workloads-syncwave" . | nindent 4 }}
+spec:
+  to:
+    kind: Service
+    name: element
+  port:
+    targetPort: default
+  wildcardPolicy: None
+  tls:
+    termination: edge

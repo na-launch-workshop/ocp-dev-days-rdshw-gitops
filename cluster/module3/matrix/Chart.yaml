@@ -1,0 +1,5 @@
+apiVersion: v2
+name: matrix
+description: A Helm chart for deploying Matrix Synapse and Element Web
+type: application
+version: 0.1.0

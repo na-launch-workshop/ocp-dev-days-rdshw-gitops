@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: filestash
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "filestash.labels" . | nindent 4 }}
+    {{- include "filestash.selectorLabels" . | nindent 4 }}
+  annotations:
+    {{- include "filestash.workloads-syncwave" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "filestash.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "filestash.selectorLabels" . | nindent 8 }}
+        deployment: filestash
+    spec:
+      volumes:
+        - name: config-volume
+          configMap:
+            name: filestash-config
+            defaultMode: 420
+      containers:
+        - name: filestash
+          image: {{ .Values.filestash.image }}
+          ports:
+            - containerPort: 8334
+              protocol: TCP
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          volumeMounts:
+            - name: config-volume
+              mountPath: /app/data/state/config

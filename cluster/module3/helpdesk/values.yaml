@@ -1,0 +1,53 @@
+namespace: helpdesk
+
+cluster:
+  subdomain: ""
+
+mongodb:
+  image: registry.redhat.io/rhscl/mongodb-36-rhel7:latest
+  adminPassword: "mongoAdmin1!"
+  user: helpdesk
+  password: "helpdesk1!"
+  database: helpdesk
+  storage:
+    size: 5Gi
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+helpdesk:
+  image: polonel/trudesk:1.2.11
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 1Gi
+      cpu: "1000m"
+
+helpdesk_admin:
+  username: admin
+  password: "Openshift1!"
+  email: admin@parasol.com
+
+branding:
+  siteTitle: "Parasol Helpdesk"
+  colors:
+    headerBg: "#8B0000"
+    headerPrimary: "#FFFFFF"
+    primary: "#151515"
+    secondary: "#F0F0F0"
+    tertiary: "#CC0000"
+    quaternary: "#D2D2D2"
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    configAndStorage: "0"
+    database: "1"
+    workloads: "2"

@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: docserver-route
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "showroom.labels" . | nindent 4 }}
+  annotations:
+    {{- include "showroom.config-syncwave" . | nindent 4 }}
+data:
+  docs.camel.yaml: |-
+{{ .Files.Get "sources/docs.camel.yaml" | indent 4 }}

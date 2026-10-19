@@ -1,0 +1,110 @@
+apiVersion: workspace.devfile.io/v1alpha2
+kind: DevWorkspace
+metadata:
+  name: {{ .Values.devworkspace.name }}
+  namespace: {{ include "user-workload.namespace" . }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+spec:
+  contributions:
+    - name: ide
+      uri: http://devspaces-dashboard.{{ .Values.devspaces.namespace }}.svc.cluster.local:8080/dashboard/api/editors/devfile?che-editor=che-incubator/che-code/latest
+  routingClass: che
+  started: true
+  template:
+    attributes:
+      controller.devfile.io/devworkspace-config:
+        name: devworkspace-config
+        namespace: openshift-devspaces
+      controller.devfile.io/scc: container-run
+      controller.devfile.io/storage-type: per-workspace
+    commands:
+      - apply:
+          component: prep-workspace
+          label: Pre Start Prep
+        id: prep-workspace
+      - exec:
+          # Workaround for CRW-11193: oc is not auto-logged in on workspace start
+          commandLine: 'oc login -u $OCP_USER -p $OCP_PASSWORD --server=$(oc whoami --show-server) --insecure-skip-tls-verify'
+          component: tools
+        id: oc-login
+      - exec:
+          commandLine: 'source ~/.bashrc && echo -e "export LAB_SCRIPTS=/projects/workshop/tools/scripts\nexport PATH=\$LAB_SCRIPTS:\$PATH\nsource setup" >> ~/.bashrc'
+          component: tools
+        id: setup-lab-default
+    components:
+      - container:
+          endpoints:
+            - exposure: public
+              name: 8080-tcp
+              protocol: https
+              secure: true
+              targetPort: 8080
+          env:
+            - name: MAVEN_CONFIG
+              value: ''
+            - name: JAVA_OPTS
+              value: '-XX:MaxRAMPercentage=50.0 -XX:+UseParallelGC -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=20 -XX:GCTimeRatio=4 -XX:AdaptiveSizePolicyWeight=90 -Dsun.zip.disableMemoryMapping=true -Xms20m -Djava.security.egd=file:/dev/./urandom -Duser.home=/home/user'
+            - name: MAVEN_OPTS
+              value: $(JAVA_OPTS)
+            {{- if .Values.cluster.appsDomain }}
+            - name: CHE_DASHBOARD_URL
+              value: https://devspaces.{{ .Values.cluster.appsDomain }}/dashboard/
+            - name: CLUSTER_CONSOLE_TITLE
+              value: OpenShift Console
+            - name: CLUSTER_CONSOLE_URL
+              value: https://console-openshift-console.{{ .Values.cluster.appsDomain }}/topology/ns/{{ include "user-workload.namespace" . }}?view=graph
+            {{- end }}
+            - name: VSCODE_TRUSTED_EXTENSIONS
+              value: "redhat.vscode-kaoto"
+            - name: HOST_USERS
+              value: 'false'
+            - name: OCP_USER
+              value: {{ .Values.tenant.username | quote }}
+            - name: OCP_PASSWORD
+              value: {{ .Values.tenant.password | quote }}
+          image: {{ .Values.devworkspace.image }}
+          memoryLimit: {{ .Values.devworkspace.memoryLimit }}
+          sourceMapping: /projects
+          volumeMounts:
+            - name: m2
+              path: /home/user/.m2
+        name: tools
+      - name: m2
+        volume:
+          size: {{ .Values.devworkspace.m2VolumeSize }}
+      - container:
+          args:
+            - '-c'
+            - >-
+              mkdir -p /projects/.bin &&
+              cp /usr/bin/oc /projects/.bin/oc &&
+              cp /usr/bin/kubectl /projects/.bin/kubectl
+          command:
+            - /bin/bash
+          cpuLimit: 200m
+          cpuRequest: 10m
+          env:
+            - name: HOME
+              value: /home/user
+            - name: HOST_USERS
+              value: 'false'
+          image: {{ .Values.devworkspace.prepWorkspace.image }}
+          memoryLimit: 256Mi
+          memoryRequest: 128Mi
+          mountSources: true
+          sourceMapping: /projects
+        name: prep-workspace
+    events:
+      preStart:
+        - prep-workspace
+      postStart:
+        - oc-login
+        - setup-lab-default
+    projects:
+      - name: workshop
+        git:
+          checkoutFrom:
+            revision: {{ .Values.devworkspace.gitBranch }}
+          remotes:
+            origin: {{ .Values.devworkspace.gitRepo }}

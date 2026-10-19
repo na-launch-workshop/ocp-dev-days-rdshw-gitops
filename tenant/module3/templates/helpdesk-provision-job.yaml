@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-hd-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  playbook.yaml: |
+    ---
+    - name: Helpdesk provisioning + Vault write
+      hosts: localhost
+      gather_facts: false
+      vars:
+        hd_url: "http://helpdesk.{{ .Values.helpdesk.namespace }}.svc.cluster.local:8118"
+        admin_user: {{ .Values.helpdesk.admin.username | quote }}
+        admin_pass: {{ .Values.helpdesk.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        user_pass: "{{ "{{" }} lookup('env', 'USER_PASSWORD') {{ "}}" }}"
+        group_name: "Group {{ .Values.tenant.username }}"
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+      tasks:
+        - name: Wait for Trudesk to be ready
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}"
+          register: r_hd
+          retries: 30
+          delay: 10
+          until: r_hd.status == 200
+
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/login"
+            method: POST
+            body_format: json
+            body:
+              username: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+
+        - name: Set admin token
+          ansible.builtin.set_fact:
+            access_token: "{{ "{{" }} r_admin_login.json.accessToken {{ "}}" }}"
+
+        - name: Get User role ID
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/roles"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          register: r_roles
+
+        - name: Set role ID
+          ansible.builtin.set_fact:
+            role_id: "{{ "{{" }} r_roles.json.roles | selectattr('name', 'equalto', 'User') | map(attribute='_id') | first {{ "}}" }}"
+
+        - name: Create group
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/groups/create"
+            method: POST
+            body_format: json
+            body:
+              name: "{{ "{{" }} group_name {{ "}}" }}"
+              members: []
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+            status_code: [200, 400]
+          register: r_create_group
+
+        - name: Set group ID from creation
+          ansible.builtin.set_fact:
+            group_id: "{{ "{{" }} r_create_group.json.group._id {{ "}}" }}"
+          when:
+            - r_create_group.status == 200
+            - r_create_group.json.group is defined
+
+        - name: Look up existing group ID
+          when: group_id is not defined
+          block:
+            - name: Fetch all groups
+              ansible.builtin.uri:
+                url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/groups/all"
+                headers:
+                  accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+              register: r_groups
+
+            - name: Set group ID from lookup
+              ansible.builtin.set_fact:
+                group_id: "{{ "{{" }} r_groups.json.groups | selectattr('name', 'equalto', group_name) | map(attribute='_id') | first {{ "}}" }}"
+
+        - name: Create user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/users/create"
+            method: POST
+            body_format: json
+            body:
+              aUsername: "{{ "{{" }} username {{ "}}" }}"
+              aFullname: "{{ "{{" }} username {{ "}}" }}"
+              aEmail: "{{ "{{" }} username {{ "}}" }}@parasol.com"
+              aPass: "{{ "{{" }} user_pass {{ "}}" }}"
+              aPassConfirm: "{{ "{{" }} user_pass {{ "}}" }}"
+              aRole: "{{ "{{" }} role_id {{ "}}" }}"
+              aGrps:
+                - "{{ "{{" }} group_id {{ "}}" }}"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+            status_code: [200, 400]
+          register: r_create_user
+
+        - name: Reactivate soft-deleted user
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/users/{{ "{{" }} username {{ "}}" }}/enable"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          when: r_create_user.status == 400
+
+        - name: Get ticket type and priority IDs
+          ansible.builtin.uri:
+            url: "{{ "{{" }} hd_url {{ "}}" }}/api/v1/tickets/types"
+            headers:
+              accesstoken: "{{ "{{" }} access_token {{ "}}" }}"
+          register: r_types
+
+        - name: Set ticket type and priority IDs
+          ansible.builtin.set_fact:
+            type_id_issue: "{{ "{{" }} r_types.json | selectattr('name', 'equalto', 'Issue') | map(attribute='_id') | first {{ "}}" }}"
+            priority_id_normal: "{{ "{{" }} (r_types.json | selectattr('name', 'equalto', 'Issue') | first).priorities | selectattr('name', 'equalto', 'Normal') | map(attribute='_id') | first {{ "}}" }}"
+
+        - name: Write Helpdesk credentials to Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: >-
+              vault kv put kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/helpdesk
+              groupId={{ "{{" }} group_id {{ "}}" }}
+              typeIdIssue={{ "{{" }} type_id_issue {{ "}}" }}
+              priorityIdNormal={{ "{{" }} priority_id_normal {{ "}}" }}
+              username={{ "{{" }} username {{ "}}" }}
+              password={{ "{{" }} user_pass {{ "}}" }}
+          register: r_vault_write
+          failed_when: r_vault_write.rc != 0
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m3-hd-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hd-provision
+          command:
+            - /bin/bash
+            - '-c'
+            - |
+              set -x
+              ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: USER_PASSWORD
+              value: {{ .Values.tenant.password | quote }}
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-hd-provision-{{ .Values.tenant.username }}

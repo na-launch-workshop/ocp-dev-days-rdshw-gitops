@@ -1,0 +1,5 @@
+apiVersion: v2
+name: camel-flows
+description: Build Camel integration flows once for reuse across all tenants
+type: application
+version: 0.1.0

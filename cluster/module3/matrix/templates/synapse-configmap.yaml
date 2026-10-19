@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+  namespace: {{ .Values.namespace }}
+  annotations:
+    {{- include "matrix.config-syncwave" . | nindent 4 }}
+data:
+  homeserver.yaml: |
+    server_name: {{ .Values.synapse.serverName | quote }}
+    pid_file: /data/homeserver.pid
+    listeners:
+      - port: 8008
+        tls: false
+        type: http
+        x_forwarded: true
+        resources:
+          - names: [client, federation]
+            compress: false
+
+    database:
+      name: sqlite3
+      args:
+        database: /data/homeserver.db
+
+    rc_login:
+      address:
+        per_second: 1000
+        burst_count: 10000
+      account:
+        per_second: 1000
+        burst_count: 10000
+      failed_attempts:
+        per_second: 1000
+        burst_count: 10000
+
+    rc_message:
+      per_second: 50
+      burst_count: 50
+
+    log_config: "/data/{{ .Values.synapse.serverName }}.log.config"
+    media_store_path: /data/media_store
+    registration_shared_secret: "BtDaMSiDS-B:V2KP-_QoGgGu,FwK~9zKfL8Ow3=g;xHAm4GR=r"
+    report_stats: false
+    macaroon_secret_key: "+Ysdz_s*7tOL0j0P&kF^@hA_wQ6SLeV6ciwxR4*f3n&HM;7fN1"
+    form_secret: "@RzaZ;NsJT1QueIgSVzw,0IhNxPf3atW_ItNXTfUIzB9:5RP4~"
+    signing_key_path: "/data/{{ .Values.synapse.serverName }}.signing.key"
+    trusted_key_servers:
+      - server_name: "matrix.org"
+
+    enable_group_creation: true

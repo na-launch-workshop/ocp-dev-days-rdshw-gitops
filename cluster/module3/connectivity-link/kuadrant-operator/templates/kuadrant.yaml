@@ -1,0 +1,9 @@
+apiVersion: kuadrant.io/v1beta1
+kind: Kuadrant
+metadata:
+  name: kuadrant
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "kuadrant-operator.labels" . | nindent 4 }}
+  annotations:
+    {{- include "kuadrant-operator.instance-syncwave" . | nindent 4 }}

@@ -1,0 +1,10 @@
+apiVersion: v2
+name: service-interconnect
+description: A Helm chart for Service Interconnect (Skupper) — cross-namespace connectivity
+type: application
+version: 0.1.0
+
+dependencies:
+  - name: skupper-operator
+    version: 0.1.0
+    repository: file://skupper-operator

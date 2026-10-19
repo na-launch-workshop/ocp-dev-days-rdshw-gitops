@@ -1,0 +1,52 @@
+{{- if .Values.module5.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.tenant.username }}-workload-m5
+  namespace: {{ .Values.argocd.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+    - pre-delete-finalizer.argocd.argoproj.io
+    - pre-delete-finalizer.argocd.argoproj.io/cleanup
+spec:
+  destination:
+    namespace: {{ .Values.argocd.namespace }}
+    server: https://kubernetes.default.svc
+  ignoreDifferences:
+    # Workspace is created stopped; students start it from the dashboard and Argo should not stop it again
+    - group: workspace.devfile.io
+      kind: DevWorkspace
+      jsonPointers:
+        - /spec/started
+  project: default
+  source:
+    path: tenant/module5
+    repoURL: {{ .Values.gitops.repoURL }}
+    targetRevision: {{ .Values.gitops.targetRevision }}
+    helm:
+      valuesObject:
+        tenant:
+          username: {{ .Values.tenant.username }}
+          # Kept separate. OpenShift identity may not be valid for application accounts
+          openshiftUser: {{ .Values.tenant.username }}
+          password: {{ .Values.tenant.password }}
+        gitlab:
+          host: {{ .Values.gitlab.host }}
+        cluster:
+          appsDomain: {{ .Values.cluster.subdomain }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 2m0s
+      limit: 30
+    syncOptions:
+      - CreateNamespace=true
+      - RespectIgnoreDifferences=true
+{{- end }}

@@ -1,0 +1,13 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: gateway-viewer
+  namespace: {{ .Values.aiGateway.namespace }}
+  labels:
+    {{- include "connectivity-link.labels" . | nindent 4 }}
+  annotations:
+    {{- include "connectivity-link.config-syncwave" . | nindent 4 }}
+rules:
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways"]
+    verbs: ["get", "list", "watch"]

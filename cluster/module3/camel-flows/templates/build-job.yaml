@@ -1,0 +1,79 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: camel-flows-build
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "camel-flows.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: camel-builder
+      restartPolicy: Never
+      volumes:
+        {{- range $app := list "m2k" "r2k" "k2m" "k2r" }}
+        - name: flow-{{ $app }}
+          configMap:
+            name: camel-flow-{{ $app }}
+        {{- end }}
+        - name: kamelets
+          configMap:
+            name: camel-kamelets
+      containers:
+        - name: builder
+          image: {{ .Values.build.image }}
+          volumeMounts:
+            {{- range $app := list "m2k" "r2k" "k2m" "k2r" }}
+            - name: flow-{{ $app }}
+              mountPath: /tmp/sources/flows/{{ $app }}
+            {{- end }}
+            - name: kamelets
+              mountPath: /tmp/sources/kamelets
+          command:
+            - bash
+            - -c
+            - |
+              source ~/.bashrc
+              set -eu
+
+              APPS="m2k r2k k2m k2r"
+
+              # --- Step 1: Copy sources to writable directory ---
+              echo "Preparing sources..."
+              cp -r /tmp/sources /tmp/build
+              cd /tmp/build/flows
+
+              # --- Step 2: Build each app ---
+              for APP in $APPS; do
+                echo "Building ${APP}..."
+                camel kubernetes run ${APP}/* \
+                  --name "${APP}" \
+                  --local-kamelet-dir ../kamelets \
+                  --cluster-type openshift
+              done
+
+              # --- Step 3: Scale down build deployments (we only need the images) ---
+              echo "Scaling down build deployments..."
+              SA_TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              KUBE_API="https://kubernetes.default.svc"
+              for APP in $APPS; do
+                curl -sSk -X PATCH \
+                  "$KUBE_API/apis/apps/v1/namespaces/{{ .Values.namespace }}/deployments/${APP}" \
+                  -H "Authorization: Bearer $SA_TOKEN" \
+                  -H "Content-Type: application/merge-patch+json" \
+                  -d '{"spec":{"replicas":0}}' > /dev/null
+                echo "  Scaled down ${APP}"
+              done
+
+              echo "Build complete. Images available in {{ .Values.namespace }}."
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1"
+            limits:
+              memory: "4Gi"
+              cpu: "2"

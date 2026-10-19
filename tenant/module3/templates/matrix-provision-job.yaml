@@ -1,0 +1,161 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: m3-matrix-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  playbook.yaml: |
+    ---
+    - name: Matrix provisioning + Vault write
+      hosts: localhost
+      gather_facts: false
+      vars:
+        synapse_url: "http://synapse.{{ .Values.matrix.namespace }}.svc.cluster.local:8008"
+        server_name: {{ .Values.matrix.serverName | quote }}
+        admin_user: {{ .Values.matrix.admin.username | quote }}
+        admin_pass: {{ .Values.matrix.admin.password | quote }}
+        username: {{ .Values.tenant.username | quote }}
+        user_pass: "{{ "{{" }} lookup('env', 'USER_PASSWORD') {{ "}}" }}"
+        room_name: {{ include "user-workload.roomname" . | trim | quote }}
+        vault_namespace: {{ .Values.vault.namespace | quote }}
+        vault_pod: "{{ .Values.vault.name }}-0"
+      tasks:
+        - name: Wait for Synapse to be ready
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/versions"
+          register: r_synapse
+          retries: 30
+          delay: 10
+          until: r_synapse.status == 200
+
+        - name: Login as admin
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/r0/login"
+            method: POST
+            body_format: json
+            body:
+              type: m.login.password
+              user: "{{ "{{" }} admin_user {{ "}}" }}"
+              password: "{{ "{{" }} admin_pass {{ "}}" }}"
+          register: r_admin_login
+
+        - name: Set admin token
+          ansible.builtin.set_fact:
+            admin_token: "{{ "{{" }} r_admin_login.json.access_token {{ "}}" }}"
+
+        - name: Create user via Admin API
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_synapse/admin/v2/users/@{{ "{{" }} username {{ "}}" }}:{{ "{{" }} server_name {{ "}}" }}"
+            method: PUT
+            body_format: json
+            body:
+              password: "{{ "{{" }} user_pass {{ "}}" }}"
+              admin: false
+              deactivated: false
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 201]
+
+        - name: Create private room
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/v3/createRoom"
+            method: POST
+            body_format: json
+            body:
+              creation_content:
+                m.federate: false
+              name: "{{ "{{" }} room_name {{ "}}" }}"
+              preset: private_chat
+              room_alias_name: "{{ "{{" }} room_name {{ "}}" }}"
+              invite:
+                - "@{{ "{{" }} username {{ "}}" }}:{{ "{{" }} server_name {{ "}}" }}"
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+            status_code: [200, 400]
+          register: r_create_room
+
+        - name: Set room ID from creation
+          ansible.builtin.set_fact:
+            room_id: "{{ "{{" }} r_create_room.json.room_id {{ "}}" }}"
+          when: r_create_room.status == 200
+
+        - name: Look up room by alias (if already existed)
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/v3/directory/room/%23{{ "{{" }} room_name {{ "}}" }}:{{ "{{" }} server_name {{ "}}" }}"
+            headers:
+              Authorization: "Bearer {{ "{{" }} admin_token {{ "}}" }}"
+          register: r_room_lookup
+          when: r_create_room.status == 400
+
+        - name: Set room ID from lookup
+          ansible.builtin.set_fact:
+            room_id: "{{ "{{" }} r_room_lookup.json.room_id {{ "}}" }}"
+          when: r_create_room.status == 400
+
+        - name: Login as user to get access token
+          ansible.builtin.uri:
+            url: "{{ "{{" }} synapse_url {{ "}}" }}/_matrix/client/r0/login"
+            method: POST
+            body_format: json
+            body:
+              type: m.login.password
+              user: "{{ "{{" }} username {{ "}}" }}"
+              password: "{{ "{{" }} user_pass {{ "}}" }}"
+          register: r_user_login
+
+        - name: Write Matrix credentials to Vault
+          kubernetes.core.k8s_exec:
+            namespace: "{{ "{{" }} vault_namespace {{ "}}" }}"
+            pod: "{{ "{{" }} vault_pod {{ "}}" }}"
+            command: >-
+              vault kv put kv/secrets/tenants/{{ "{{" }} username {{ "}}" }}/matrix
+              token={{ "{{" }} r_user_login.json.access_token {{ "}}" }}
+              room={{ "{{" }} room_id {{ "}}" }}
+          register: r_vault_write
+          failed_when: r_vault_write.rc != 0
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: m3-matrix-provision-{{ .Values.tenant.username }}
+  labels:
+    {{- include "user-workload.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      serviceAccountName: tenant-{{ .Values.tenant.username }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: matrix-provision
+          command:
+            - /bin/bash
+            - '-c'
+            - |
+              set -x
+              ansible-playbook -i localhost /scripts/playbook.yaml
+          image: quay.io/agnosticd/ee-multicloud:latest
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          env:
+            - name: USER_PASSWORD
+              value: {{ .Values.tenant.password | quote }}
+          volumeMounts:
+            - mountPath: /scripts
+              name: scripts
+      restartPolicy: Never
+      volumes:
+        - name: scripts
+          configMap:
+            name: m3-matrix-provision-{{ .Values.tenant.username }}

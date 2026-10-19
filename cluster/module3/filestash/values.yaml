@@ -1,0 +1,14 @@
+namespace: filestash
+
+cluster:
+  subdomain: ""
+
+filestash:
+  image: machines/filestash
+
+argocd:
+  syncwave:
+    enabled: true
+    namespace: "-1"
+    config: "0"
+    workloads: "1"
