@@ -1,0 +1,29 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: udi-rhel9
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  lookupPolicy:
+    local: false
+  tags:
+  - annotations: null
+    from:
+      kind: DockerImage
+      name: registry.redhat.io/devspaces/udi-rhel9:3.30
+    importPolicy:
+      importMode: Legacy
+    name: "3.30"
+    referencePolicy:
+      type: Source
+  # Alias so devfiles can reference :latest and stay on the pinned version above
+  - annotations: null
+    from:
+      kind: ImageStreamTag
+      name: "3.30"
+    name: latest
+    referencePolicy:
+      type: Source
