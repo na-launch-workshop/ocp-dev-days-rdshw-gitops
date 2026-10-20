@@ -13,7 +13,10 @@ tempoStack:
   storageSize: 10Gi
 
 minio:
-  image: quay.io/minio/minio:latest
+  # MinIO's own registries (quay.io/minio, docker.io/minio) now require
+  # authentication for all tags, so we use Chainguard's public build.
+  image: cgr.dev/chainguard/minio:latest
+  mcImage: cgr.dev/chainguard/minio-client:latest-dev
   rootUser: minio
   rootPassword: minio123
   bucket: tempo
