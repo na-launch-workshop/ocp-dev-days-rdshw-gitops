@@ -1,0 +1,22 @@
+{{- if .Values.extensionUpload.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: openvsx-sqlite-extension-list
+  labels:
+    {{- include "openvsx.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  extension-list.json: |
+    {
+      "vscode": "1.128.1",
+      "architecture": "linux-x64",
+      "extensions": [
+        {
+          "id": "qwtel.sqlite-viewer"
+        }
+      ]
+    }
+{{- end }}
