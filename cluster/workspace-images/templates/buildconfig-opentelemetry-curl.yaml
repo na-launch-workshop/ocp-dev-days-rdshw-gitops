@@ -1,0 +1,102 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: opentelemetry-curl
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  source:
+    type: Dockerfile
+    dockerfile: |
+      FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+      ENV ENDPOINT=localhost:5000
+
+      RUN { \
+            echo '#!/bin/bash'; \
+            echo '# Randomly send either a valid or an invalid POST request to /api/check'; \
+            echo 'if [ "$#" -ne 1 ]; then'; \
+            echo '  echo "Usage: ./api-check.sh host:port (i.e. localhost:5000)" >&2'; \
+            echo '  exit 1'; \
+            echo 'fi'; \
+            echo 'if [ $(( RANDOM % 2 )) -eq 0 ]; then'; \
+            echo '  echo "$(date): Sending valid request"'; \
+            echo '  curl -s -X POST -H "Content-Type: application/json" -d '\''{ "customerName" : "ACME", "dateOfTransaction" : "04/17/2025", "amount": 30000 }'\'' http://$1/api/check -v'; \
+            echo '  echo ""'; \
+            echo 'else'; \
+            echo '  echo "$(date): Sending invalid request"'; \
+            echo '  curl -s -X POST -H "Content-Type: application/json" -d '\''{ "customerName" : "ACME", "dateOfTransaction" : "04/17/2025", "amount": 20000 }'\'' http://$1/api/check -v'; \
+            echo '  echo ""'; \
+            echo 'fi'; \
+          } > /opt/api-check.sh \
+          && chmod +x /opt/api-check.sh
+
+      ENTRYPOINT /opt/api-check.sh $ENDPOINT
+  strategy:
+    type: Docker
+  output:
+    to:
+      kind: ImageStreamTag
+      name: opentelemetry-curl:latest
+  # The PostSync Job below only retries if this trigger's build did not produce
+  # an image. Deliberately no ImageChange trigger: it writes
+  # lastTriggeredImageID back into spec, which Argo CD reports as drift.
+  triggers:
+    - type: ConfigChange
+  runPolicy: Serial
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: opentelemetry-curl-build
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: cekit-builder
+      containers:
+        - name: build-opentelemetry-curl
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get istag opentelemetry-curl:latest
+              do
+                echo "Waiting for opentelemetry-curl image build to complete"
+                oc start-build opentelemetry-curl -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
