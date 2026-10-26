@@ -1,9 +1,3 @@
-{{/*
-curl poller image for the OpenTelemetry workshops. The dotnet and python
-workshops ship an identical curl-cron/ directory, so one image serves both.
-The name is referenced by curl-cron/cronjob.yaml in each workshop repo, so
-it cannot be changed here alone.
-*/}}
 apiVersion: image.openshift.io/v1
 kind: ImageStream
 metadata:
