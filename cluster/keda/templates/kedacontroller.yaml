@@ -1,0 +1,15 @@
+apiVersion: keda.sh/v1alpha1
+kind: KedaController
+metadata:
+  name: {{ .Values.kedaController.name }}
+  namespace: {{ .Values.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  {{- if .Values.kedaController.watchNamespace }}
+  watchNamespace: {{ .Values.kedaController.watchNamespace }}
+  {{- end }}
+  operator:
+    logLevel: {{ .Values.kedaController.operator.logLevel }}
+  metricsServer:
+    logLevel: {{ .Values.kedaController.metricsServer.logLevel | quote }}

@@ -15,6 +15,7 @@ spec:
         - values.yaml
         - overrides-observability.yaml
         - overrides-ai-sandbox.yaml
+        - overrides-keda.yaml
       valuesObject:
         gitops:
           repoURL: {{ .Values.gitops.repoURL }}
