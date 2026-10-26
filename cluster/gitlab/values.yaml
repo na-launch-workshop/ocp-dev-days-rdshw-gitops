@@ -88,6 +88,7 @@ gitlab:
       templates:
         - scaffolder/enable-observability/template.yaml
         - scaffolder/enable-ai-sandbox/template.yaml
+        - scaffolder/enable-keda/template.yaml
 postgresql:
   dbUser: gitlab
   dbPassword: passw0rd
