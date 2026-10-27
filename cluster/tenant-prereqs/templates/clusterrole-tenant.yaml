@@ -27,6 +27,27 @@ rules:
   - apiGroups: ["autoscaling"]
     resources: ["horizontalpodautoscalers"]
     verbs: ["*"]
+  # KEDA / Custom Metrics Autoscaler
+  - apiGroups: ["keda.sh"]
+    resources: ["scaledobjects", "scaledjobs", "triggerauthentications"]
+    verbs: ["*"]
+  - apiGroups: ["keda.sh"]
+    resources: ["scaledobjects/status", "scaledjobs/status", "triggerauthentications/status"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["keda.sh"]
+    resources: ["clustertriggerauthentications"]
+    verbs: ["get", "list", "watch"]
+  # KEDA HTTP add-on
+  - apiGroups: ["http.keda.sh"]
+    resources: ["httpscaledobjects"]
+    verbs: ["*"]
+  - apiGroups: ["http.keda.sh"]
+    resources: ["httpscaledobjects/status", "interceptorroutes"]
+    verbs: ["get", "list", "watch"]
+  # Lets tenants inspect the metric values KEDA feeds to the HPA
+  - apiGroups: ["external.metrics.k8s.io"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
   # Networking
   - apiGroups: ["networking.k8s.io"]
     resources: ["networkpolicies", "ingresses"]

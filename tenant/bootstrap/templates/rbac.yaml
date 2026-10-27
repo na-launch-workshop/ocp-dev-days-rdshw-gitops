@@ -3,6 +3,7 @@
   (printf "%s-build" $username)
   (printf "%s-dev" $username)
   (printf "%s-prod" $username)
+  (printf "%s-devspaces" $username)
 }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
