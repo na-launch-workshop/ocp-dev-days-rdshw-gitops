@@ -26,3 +26,8 @@ spec:
   {{- if .Values.subscription.startingCSV }}
   startingCSV: {{ .Values.subscription.startingCSV }}
   {{- end }}
+  {{- with .Values.subscription.resources }}
+  config:
+    resources:
+      {{- toYaml . | nindent 6 }}
+  {{- end }}

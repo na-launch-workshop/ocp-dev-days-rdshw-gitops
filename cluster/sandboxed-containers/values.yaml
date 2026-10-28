@@ -7,6 +7,15 @@ subscription:
   source: redhat-operators
   sourceNamespace: openshift-marketplace
   startingCSV: ""
+  # The default 256Mi limit OOMKills the controller-manager on clusters with
+  # many namespaces, since it caches every Secret cluster-wide.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 kataconfig:
   checkNodeEligibility: false
