@@ -1,0 +1,80 @@
+# Price API sidecar for the "Using Streams for Apache Kafka" workshop (Task 6).
+# One image serves both the Python and .NET versions of the lab — it is only called over HTTP.
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: electricity-price-api
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  source:
+    type: Git
+    contextDir: {{ .Values.electricityPriceApi.git.contextDir }}
+    git:
+      uri: {{ .Values.electricityPriceApi.git.uri }}
+      ref: {{ .Values.electricityPriceApi.git.ref }}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: electricity-price-api:latest
+  runPolicy: Serial
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: electricity-price-api-build
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: cekit-builder
+      containers:
+        - name: build-electricity-price-api
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get istag electricity-price-api:latest
+              do
+                echo "Waiting for electricity-price-api image build to complete"
+                oc start-build electricity-price-api -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault

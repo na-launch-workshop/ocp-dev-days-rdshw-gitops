@@ -8,6 +8,13 @@ git:
   ref: "main"
   contextDir: "cekit-builder-image"
 
+# Source for the Kafka workshop's electricity price API sidecar image
+electricityPriceApi:
+  git:
+    uri: "https://github.com/na-launch-workshop/workshop-python-interacting_with_kafka.git"
+    ref: "main"
+    contextDir: "sidecar"
+
 # Image registry configuration
 registry:
   hostname: "image-registry.openshift-image-registry.svc:5000"
