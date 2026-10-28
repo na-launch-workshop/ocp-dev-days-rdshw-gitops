@@ -8,12 +8,28 @@ git:
   ref: "main"
   contextDir: "cekit-builder-image"
 
-# Source for the Kafka workshop's electricity price API sidecar image
-electricityPriceApi:
+# This gitops repo, for images whose source lives in it. The app-of-apps Application
+# overrides both with its own repoURL and targetRevision.
+build:
   git:
-    uri: "https://github.com/na-launch-workshop/workshop-python-interacting_with_kafka.git"
+    uri: "https://github.com/na-launch-workshop/ocp-dev-days-rdshw-gitops.git"
     ref: "main"
-    contextDir: "sidecar"
+
+# Kafka workshop's electricity price API sidecar image, built from this repo
+electricityPriceApi:
+  contextDir: "cluster/workspace-images/electricity-price-api"
+
+# KEDA workshop's scoreboard images, built from each workshop repo's admin/ directory
+nbaScoreboard:
+  git:
+    uri: "https://github.com/na-launch-workshop/workshop-python-keda-autoscaling.git"
+    ref: "main"
+    contextDir: "admin"
+nbaScoreboardDotnet:
+  git:
+    uri: "https://github.com/na-launch-workshop/workshop-dotnet-keda-autoscaling.git"
+    ref: "main"
+    contextDir: "admin"
 
 # Image registry configuration
 registry:

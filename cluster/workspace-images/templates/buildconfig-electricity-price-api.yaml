@@ -1,5 +1,6 @@
-# Price API sidecar for the "Using Streams for Apache Kafka" workshop (Task 6).
+# Price API sidecar for the "Event Streaming with Apache Kafka" workshop (Task 6).
 # One image serves both the Python and .NET versions of the lab — it is only called over HTTP.
+# Source: ../electricity-price-api/ in this repo.
 apiVersion: build.openshift.io/v1
 kind: BuildConfig
 metadata:
@@ -11,10 +12,10 @@ metadata:
 spec:
   source:
     type: Git
-    contextDir: {{ .Values.electricityPriceApi.git.contextDir }}
+    contextDir: {{ .Values.electricityPriceApi.contextDir }}
     git:
-      uri: {{ .Values.electricityPriceApi.git.uri }}
-      ref: {{ .Values.electricityPriceApi.git.ref }}
+      uri: {{ .Values.build.git.uri }}
+      ref: {{ .Values.build.git.ref }}
   strategy:
     type: Docker
     dockerStrategy:

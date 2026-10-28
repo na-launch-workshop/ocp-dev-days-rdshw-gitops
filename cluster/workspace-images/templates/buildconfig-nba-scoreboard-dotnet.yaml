@@ -1,0 +1,82 @@
+# Scoreboard + surge image for the "Event-Driven Autoscaling with KEDA" workshop (.NET).
+# The instructor's admin/deploy-all.sh and admin/surge-all.sh run it in every participant
+# namespace. Source stays in the workshop repo (admin/), where it is developed — after changing
+# it, rebuild with: oc start-build nba-scoreboard-dotnet -n workspace-images
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: nba-scoreboard-dotnet
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+spec:
+  source:
+    type: Git
+    contextDir: {{ .Values.nbaScoreboardDotnet.git.contextDir }}
+    git:
+      uri: {{ .Values.nbaScoreboardDotnet.git.uri }}
+      ref: {{ .Values.nbaScoreboardDotnet.git.ref }}
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Dockerfile
+  output:
+    to:
+      kind: ImageStreamTag
+      name: nba-scoreboard-dotnet:latest
+  runPolicy: Serial
+  successfulBuildsHistoryLimit: 3
+  failedBuildsHistoryLimit: 3
+  resources: {}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nba-scoreboard-dotnet-build
+  labels:
+    {{- include "workspace-images.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: cekit-builder
+      containers:
+        - name: build-nba-scoreboard-dotnet
+          image: image-registry.openshift-image-registry.svc:5000/openshift/cli:latest
+          command:
+            - /bin/bash
+            - -c
+            - |
+              count=0
+              limit=5
+              while ! oc get istag nba-scoreboard-dotnet:latest
+              do
+                echo "Waiting for nba-scoreboard-dotnet image build to complete"
+                oc start-build nba-scoreboard-dotnet -w -F
+                count=$(( ${count} + 1 ))
+                if [[ ${count} -eq ${limit} ]]
+                then
+                  echo "Failed to build image"
+                  exit 1
+                fi
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
