@@ -17,3 +17,12 @@ kedaController:
   metricsServer:
     logLevel: "0"
   watchNamespace: ""
+
+# KEDA HTTP add-on, deployed by the backroom app: allow its pods to run (see templates/http-add-on-scc.yaml).
+# Service account names are those of the keda-add-ons-http 0.16.0 chart — check them on chart upgrades.
+httpAddon:
+  namespace: keda
+  serviceAccounts:
+    - keda-add-ons-http
+    - keda-add-ons-http-interceptor
+    - keda-add-ons-http-external-scaler

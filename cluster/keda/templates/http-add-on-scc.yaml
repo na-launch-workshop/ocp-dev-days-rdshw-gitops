@@ -1,0 +1,34 @@
+{{- with .Values.httpAddon }}
+# The KEDA HTTP add-on (keda-add-ons-http chart, deployed by the backroom app) sets
+# fsGroup/supplementalGroups 1000 on its pods, which the default restricted-v2 SCC rejects —
+# its Deployments then never get pods. Let its service accounts use nonroot-v2, which allows
+# any fsGroup but still requires a non-root user (the add-on images run as 65532).
+#
+# The namespace is created here too, so this binding can apply before the backroom KEDA
+# option is enabled; Delete=false keeps Argo CD from ever deleting it along with the add-on.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+    argocd.argoproj.io/sync-options: Delete=false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: keda-http-add-on-nonroot-v2
+  namespace: {{ .namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:openshift:scc:nonroot-v2
+subjects:
+{{- range .serviceAccounts }}
+  - kind: ServiceAccount
+    name: {{ . }}
+    namespace: {{ $.Values.httpAddon.namespace }}
+{{- end }}
+{{- end }}
