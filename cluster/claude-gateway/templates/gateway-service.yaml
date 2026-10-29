@@ -9,6 +9,13 @@ metadata:
 spec:
   selector:
     app.kubernetes.io/name: claude-gateway
+  # Each gateway pod keeps a user's conversation history in memory and their cloned repo
+  # on a pod-local emptyDir. Pin every client (one workspace pod IP per user) to one
+  # gateway pod, for as long as their token lasts, so replicas > 1 don't lose that state.
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: {{ .Values.gateway.tokenTTLSeconds }}
   ports:
     - port: 8080
       targetPort: 8080
