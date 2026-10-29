@@ -21,6 +21,16 @@ spec:
       annotations: {}
     spec:
       runtimeClassName: kata
+      # Kata is installed only on the worker-cluster-* nodes, but the control planes are
+      # schedulable and also labelled kata-oc, so the RuntimeClass alone lets pods land there
+      # and fail with "failed to find runtime handler kata".
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
       serviceAccountName: claude-agent
       automountServiceAccountToken: false
       securityContext:
