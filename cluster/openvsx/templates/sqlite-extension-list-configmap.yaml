@@ -16,6 +16,9 @@ data:
       "extensions": [
         {
           "id": "qwtel.sqlite-viewer"
+        },
+        {
+          "id": "zknpr.sqlite-explorer"
         }
       ]
     }
